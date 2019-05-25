@@ -13,6 +13,11 @@ Any object is considered `flattenable` where the following operations are define
 
 .. note:: The nature of using generics in Nim means there is no static typing to ensure what you think is a flattenable really is. If the behaviors are not defined, you will get possibly strange compile errors.
 
+Flattening does not particularly care about the format used to keep an object. You can use raw binary dumps, protocol buffers, JSON, and so forth. Anything which can be written to a memory buffer and later read back is allowed.
+
+Flattening and Unflatten/Decanting
+----------------------------------
+
 .. code:: nim
 
   proc flatten(self: Thing; buffer: pointer; headroom: uint)

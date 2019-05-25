@@ -11,6 +11,9 @@ Welcome to The Beep Boop Conspiracy's documentation!
    :caption: Contents:
 
    flattenable.rst
+   archivable.rst
+
+   messenger.rst
 
    tap.rst
 

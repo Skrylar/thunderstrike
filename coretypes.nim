@@ -1,8 +1,12 @@
 
 type
     TypeCode* = int32
+    BigTime* = int64
+    TeamId* = distinct pointer
 
 const
+    INFINITE_TIMEOUT* = high(BigTime)
+
     # [[[cog
     # cons = """ANY_TYPE CHAR_TYPE INT8_TYPE INT16_TYPE INT32_TYPE INT64_TYPE
     # UINT8_TYPE UINT16_TYPE UINT32_TYPE UINT64_TYPE FLOAT_TYPE
