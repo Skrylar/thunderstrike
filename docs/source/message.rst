@@ -45,7 +45,17 @@ If `data` is `nil`, space is still reserved inside the message but no data is co
 
 The user story for no-copy packaging like this is so that objects can be flattened immediately in to a message buffer, or for example a string's length can be written followed by blitting that string. Without the no-copy mode (as in Be/Haiku) you would have to pack the objects to a holding area, then blit to the message.
 
-.. todo::
-   Optimize space usage by forcing 32-bit pointers.
+Overhead
+^^^^^^^^
 
-   We currently use machine words which means 64-bit systems are wasting some space that will never be used; messages should be as small as possible, and definitely will not be *over* two terrabytes in size.
+The current format used internally is dubbed "random indexed block" format, because it is based around messages being constructed at random order in an append-only format. As such every block knows the location of the next block in the chain, which can appear anywhere in the buffer. Each field also knows the location of its next sibling, also anywhere in the buffer.
+
+Messages have a fixed overhead of 17 bytes, with an additional overhead of 15 bytes (+length of field name) per field. Each value stored in a field has eight bytes of overhead.
+
+So a message such as:
+
+- what: button
+- pressed: boolean
+- button: int8
+
+Has a natural compact size of six bytes, but would be encoded as 38 bytes. This is an overhead of 600%. This only applies to very small messages as the overhead of messages approaches 200% as their size increases [tested via simulation with NumPy.]

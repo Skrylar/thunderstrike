@@ -4,24 +4,25 @@ import coretypes
 type
     MessageBlock = object
         flags: uint8
-        block_size: int
         what: uint32
-        first_specifier: int
-        first_field: int
+        block_size: int32 # binary versioning field
+        first_specifier: uint32
+        first_field: uint32
 
     MessageSpecifierBlock = object
         flags: uint8
-        block_size: int
+        next_block: uint32
 
     MessageFieldBlock = object
         flags: uint8
-        name_length: int # name is directly after field block
+        name_length: uint16 # name is directly after field block
         typecode: TypeCode
-        next_value: int
-        next_block: int
+        next_value: uint32
+        next_block: uint32
 
     MessageFieldValueBlock = object
-        next_value: int
+        block_size: uint32
+        next_value: uint32
 
     Message* = object
         buffer: seq[byte]
@@ -29,10 +30,14 @@ type
 # Messages
 # ========
 
+# TODO put in bounds checking on deref
+# ^ not a big deal for trusted code but if we start doing RPC with arbitrary
+# software some of it might be defective
+
 proc initialize(self: var MessageBlock; what: uint32) =
     self.flags = 0
     self.what = what
-    self.block_size = MessageBlock.sizeof
+    self.block_size = MessageBlock.sizeof.int32
     self.first_specifier = 0
     self.first_field = 0
 
@@ -48,14 +53,14 @@ iterator fields(self: Message): ptr MessageFieldBlock =
     var head = cast[ptr MessageBlock](unsafeaddr self.buffer[0])
     var here = head.first_field
     while here != 0:
-        var me = cast[ptr MessageFieldBlock](unsafeaddr self.buffer[here])
+        var me = cast[ptr MessageFieldBlock](unsafeaddr self.buffer[here.int])
         yield me
         here = me.next_block
 
 iterator values(message: Message; self: ptr MessageFieldBlock): ptr MessageFieldValueBlock =
     var here = self.next_value
     while here != 0:
-        var x = cast[ptr MessageFieldValueBlock](unsafeaddr message.buffer[here])
+        var x = cast[ptr MessageFieldValueBlock](unsafeaddr message.buffer[here.int])
         yield x
         here = x.next_value
 
@@ -72,7 +77,7 @@ proc tail_field*(self: Message): ptr MessageFieldBlock =
 proc get_field*(self: Message; name: string): ptr MessageFieldBlock =
     result = nil
     for f in self.fields:
-        if f.name_length != name.len: continue
+        if f.name_length.int != name.len: continue
         if equalmem(cast[pointer](cast[int](f) + MessageFieldBlock.sizeof), unsafeaddr name[0], f.name_length): return f
 
 proc has_field*(self: Message; name: string): bool =
@@ -86,7 +91,10 @@ proc add_data*(self: var Message;
          fixed_size: bool = true;
               count: int = 1): pointer {.discardable.} =
 
+    # TODO change these to real exceptions
     assert length >= 1
+    assert length <= high(uint32).int
+    assert len(name) < high(uint16).int
     assert count >= 0
 
     result = nil
@@ -109,7 +117,7 @@ proc add_data*(self: var Message;
         set_len(self.buffer, self.buffer.len + MessageFieldBlock.sizeof + name.len + MessageFieldValueBlock.sizeof + length)
         blk = cast[ptr MessageFieldBlock](addr self.buffer[point])
         blk.flags = 0 # TODO fixed length flag
-        blk.name_length = len(name)
+        blk.name_length = len(name).uint16
         blk.typecode = typecode
         blk.next_block = 0
         # copy string in to header
@@ -123,6 +131,7 @@ proc add_data*(self: var Message;
         let rec = point
         var val = cast[ptr MessageFieldValueBlock](addr self.buffer[point])
         val.next_value = 0
+        val.block_size = length.uint32
         inc point, MessageFieldValueBlock.sizeof
         if data != nil:
             copymem(cast[pointer](addr self.buffer[point]), data, length)
@@ -131,18 +140,18 @@ proc add_data*(self: var Message;
 
         var tail = tail_value(self, blk)
         if tail != nil:
-            tail.next_value = rec
+            tail.next_value = rec.uint32
         else:
-            blk.next_value = rec
+            blk.next_value = rec.uint32
 
     if not stored:
         # register with index
         var tail = self.tail_field
         if tail == nil:
             var head = cast[ptr MessageBlock](unsafeaddr self.buffer[0])
-            head.first_field = int(rec)
+            head.first_field = int(rec).uint32
         else:
-            tail.next_block = int(rec)
+            tail.next_block = int(rec).uint32
 
 proc count_values*(self: Message; key: string): int =
     result = 0
@@ -168,18 +177,46 @@ msg.add_data("delicious", 38, addr delicious, delicious.sizeof)
 assert(msg.count_values("delicious") == 3)
 assert(msg.has_field("baguette"))
 
+# [[[cog
+# pairs = [('bool', 'BOOL_TYPE'),
+# ('int8', 'INT8_TYPE'),
+# ('int16', 'INT16_TYPE'),
+# ('int32', 'INT32_TYPE'),
+# ('int64', 'INT64_TYPE'),
+# ('uint8', 'UINT8_TYPE'),
+# ('uint16', 'UINT16_TYPE'),
+# ('uint32', 'UINT32_TYPE'),
+# ('uint64', 'UINT64_TYPE'),
+# ('float32', 'FLOAT_TYPE'),
+# ('float64', 'DOUBLE_TYPE')]
+# for x in pairs:
+#   cog.outl("""proc add*(self: var Message; key: string; value: {0}) =
+#   self.add_data(key, {1}, cast[pointer](unsafeaddr value), value.sizeof)""".format(x[0], x[1]))
+#]]]
+proc add*(self: var Message; key: string; value: bool) =
+  self.add_data(key, BOOL_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
+proc add*(self: var Message; key: string; value: int8) =
+  self.add_data(key, INT8_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
+proc add*(self: var Message; key: string; value: int16) =
+  self.add_data(key, INT16_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
+proc add*(self: var Message; key: string; value: int32) =
+  self.add_data(key, INT32_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
+proc add*(self: var Message; key: string; value: int64) =
+  self.add_data(key, INT64_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
+proc add*(self: var Message; key: string; value: uint8) =
+  self.add_data(key, UINT8_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
+proc add*(self: var Message; key: string; value: uint16) =
+  self.add_data(key, UINT16_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
+proc add*(self: var Message; key: string; value: uint32) =
+  self.add_data(key, UINT32_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
+proc add*(self: var Message; key: string; value: uint64) =
+  self.add_data(key, UINT64_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
+proc add*(self: var Message; key: string; value: float32) =
+  self.add_data(key, FLOAT_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
+proc add*(self: var Message; key: string; value: float64) =
+  self.add_data(key, DOUBLE_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
+# [[[end]]]
 
-#bool BOOL_TYPE
-#int8 INT8_TYPE
-#int16 INT16_TYPE
-#int32 INT32_TYPE
-#int64 INT64_TYPE
-#uint8 UINT8_TYPE
-#uint16 UINT16_TYPE
-#uint32 UINT32_TYPE
-#uint64 UINT64_TYPE
-#float32 FLOAT_TYPE
-#float64 DOUBLE_TYPE
 
 #string
 #point
@@ -188,4 +225,4 @@ assert(msg.has_field("baguette"))
 #messenger
 #pointer
 #flat
-#
+
