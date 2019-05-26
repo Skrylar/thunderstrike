@@ -10,6 +10,8 @@ Welcome to The Beep Boop Conspiracy's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   message.rst
+	     
    flattenable.rst
    archivable.rst
 

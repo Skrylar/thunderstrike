@@ -84,10 +84,12 @@ proc add_data*(self: var Message;
                data: pointer;
              length: int;
          fixed_size: bool = true;
-              count: int = 1) =
+              count: int = 1): pointer {.discardable.} =
 
-    assert length >= 0
+    assert length >= 1
     assert count >= 0
+
+    result = nil
 
     var blk = self.get_field(name)
     var stored = (blk != nil)
@@ -122,7 +124,10 @@ proc add_data*(self: var Message;
         var val = cast[ptr MessageFieldValueBlock](addr self.buffer[point])
         val.next_value = 0
         inc point, MessageFieldValueBlock.sizeof
-        copymem(cast[pointer](addr self.buffer[point]), data, length)
+        if data != nil:
+            copymem(cast[pointer](addr self.buffer[point]), data, length)
+        else:
+            result = cast[pointer](addr self.buffer[point])
 
         var tail = tail_value(self, blk)
         if tail != nil:
@@ -163,15 +168,19 @@ msg.add_data("delicious", 38, addr delicious, delicious.sizeof)
 assert(msg.count_values("delicious") == 3)
 assert(msg.has_field("baguette"))
 
-#data
-#
-#bool
-#int8
-#int16
-#int32
-#int64
-#float32
-#float64
+
+#bool BOOL_TYPE
+#int8 INT8_TYPE
+#int16 INT16_TYPE
+#int32 INT32_TYPE
+#int64 INT64_TYPE
+#uint8 UINT8_TYPE
+#uint16 UINT16_TYPE
+#uint32 UINT32_TYPE
+#uint64 UINT64_TYPE
+#float32 FLOAT_TYPE
+#float64 DOUBLE_TYPE
+
 #string
 #point
 #rect
