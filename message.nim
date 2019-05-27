@@ -83,16 +83,17 @@ proc get_field*(self: Message; name: string): ptr MessageFieldBlock =
 proc has_field*(self: Message; name: string): bool =
     return get_field(self, name) != nil
 
-proc add_data*(self: var Message;
-               name: string;
-           typecode: TypeCode;
-               data: pointer;
-             length: int;
-         fixed_size: bool = true;
-              count: int = 1): pointer {.discardable.} =
+proc add_data*(
+          self: var Message;
+          name: string;
+      typecode: TypeCode;
+          data: pointer;
+        length: int;
+    fixed_size: bool = true;
+         count: int = 1): pointer {.discardable.} =
 
     # TODO change these to real exceptions
-    assert length >= 1
+    assert length >= 0
     assert length <= high(uint32).int
     assert len(name) < high(uint16).int
     assert count >= 0
@@ -161,22 +162,6 @@ proc count_values*(self: Message; key: string): int =
     for v in values(self, f):
         inc result
 
-var msg = make_message(0)
-assert(not msg.has_field("baguette"))
-msg.add_data("baguette", 0, nil, 0)
-var delicious = true
-assert(msg.count_values("delicious") == 0)
-msg.add_data("delicious", 38, addr delicious, delicious.sizeof)
-assert(msg.has_field("delicious"))
-assert(msg.count_values("delicious") == 1)
-delicious = false
-msg.add_data("delicious", 38, addr delicious, delicious.sizeof)
-echo msg.count_values("delicious")
-assert(msg.count_values("delicious") == 2)
-msg.add_data("delicious", 38, addr delicious, delicious.sizeof)
-assert(msg.count_values("delicious") == 3)
-assert(msg.has_field("baguette"))
-
 # [[[cog
 # pairs = [('bool', 'BOOL_TYPE'),
 # ('int8', 'INT8_TYPE'),
@@ -188,7 +173,8 @@ assert(msg.has_field("baguette"))
 # ('uint32', 'UINT32_TYPE'),
 # ('uint64', 'UINT64_TYPE'),
 # ('float32', 'FLOAT_TYPE'),
-# ('float64', 'DOUBLE_TYPE')]
+# ('float64', 'DOUBLE_TYPE'),
+# ('pointer', 'POINTER_TYPE')]
 # for x in pairs:
 #   cog.outl("""proc add*(self: var Message; key: string; value: {0}) =
 #   self.add_data(key, {1}, cast[pointer](unsafeaddr value), value.sizeof)""".format(x[0], x[1]))
@@ -215,14 +201,227 @@ proc add*(self: var Message; key: string; value: float32) =
   self.add_data(key, FLOAT_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
 proc add*(self: var Message; key: string; value: float64) =
   self.add_data(key, DOUBLE_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
+proc add*(self: var Message; key: string; value: pointer) =
+  self.add_data(key, POINTER_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
 # [[[end]]]
 
+proc add*(self: var Message; key: string; value: string) =
+    # XXX assuming strings are made of chars
+    var x = self.add_data(key, STRING_TYPE, nil, len(value))
+    copymem(x,
+        unsafeaddr value[0],
+        len(value))
+
+proc find_data*(
+            self: Message;
+             key: string;
+        typecode: out TypeCode;
+            data: out pointer;
+          length: out int;
+           index: int = 0): bool =
+    result = false
+    var header = self.get_field(key)
+    if header == nil: return
+
+    var skip = index
+    typecode = header.typecode
+    for value in self.values(header):
+        # skip as many as we need to
+        if skip > 0:
+            dec skip
+            continue
+        data = cast[pointer](cast[int](value) + MessageFieldValueBlock.sizeof)
+        length = value.block_size.int
+        return true
 
 #string
 #point
 #rect
 #message
 #messenger
-#pointer
 #flat
 
+var msg = make_message(0)
+assert(not msg.has_field("baguette"))
+msg.add_data("baguette", 0, nil, 0)
+var delicious = true
+assert(msg.count_values("delicious") == 0)
+msg.add_data("delicious", 38, addr delicious, delicious.sizeof)
+assert(msg.has_field("delicious"))
+assert(msg.count_values("delicious") == 1)
+delicious = false
+msg.add_data("delicious", 38, addr delicious, delicious.sizeof)
+assert(msg.count_values("delicious") == 2)
+msg.add_data("delicious", 38, addr delicious, delicious.sizeof)
+assert(msg.count_values("delicious") == 3)
+assert(msg.has_field("baguette"))
+
+var code: TypeCode
+var data: pointer
+var dlen: int
+var found = msg.find_data("delicious", code, data, dlen)
+assert(code == 38)
+assert(found == true)
+assert(dlen == bool.sizeof)
+assert(cast[ptr bool](data)[] == true)
+
+
+# [[[cog
+# for x in pairs:
+#   cog.outl("""proc try_find_{0}*(self: Message; key: string; default_value: {0}; index: int): {0} =
+#   var data: pointer
+#   var dlen: int
+#   var code: TypeCode
+#   var found: bool
+#   found = self.find_data(key, code, data, dlen, index)
+#   if (not found) or (code != {1}):
+#     return default_value
+#   assert dlen == {0}.sizeof
+#   result = cast[ptr {0}](data)[]
+#   """.format(x[0], x[1]))
+# ]]]
+proc try_find_bool*(self: Message; key: string; default_value: bool; index: int): bool =
+  var data: pointer
+  var dlen: int
+  var code: TypeCode
+  var found: bool
+  found = self.find_data(key, code, data, dlen, index)
+  if (not found) or (code != BOOL_TYPE):
+    return default_value
+  assert dlen == bool.sizeof
+  result = cast[ptr bool](data)[]
+  
+proc try_find_int8*(self: Message; key: string; default_value: int8; index: int): int8 =
+  var data: pointer
+  var dlen: int
+  var code: TypeCode
+  var found: bool
+  found = self.find_data(key, code, data, dlen, index)
+  if (not found) or (code != INT8_TYPE):
+    return default_value
+  assert dlen == int8.sizeof
+  result = cast[ptr int8](data)[]
+  
+proc try_find_int16*(self: Message; key: string; default_value: int16; index: int): int16 =
+  var data: pointer
+  var dlen: int
+  var code: TypeCode
+  var found: bool
+  found = self.find_data(key, code, data, dlen, index)
+  if (not found) or (code != INT16_TYPE):
+    return default_value
+  assert dlen == int16.sizeof
+  result = cast[ptr int16](data)[]
+  
+proc try_find_int32*(self: Message; key: string; default_value: int32; index: int): int32 =
+  var data: pointer
+  var dlen: int
+  var code: TypeCode
+  var found: bool
+  found = self.find_data(key, code, data, dlen, index)
+  if (not found) or (code != INT32_TYPE):
+    return default_value
+  assert dlen == int32.sizeof
+  result = cast[ptr int32](data)[]
+  
+proc try_find_int64*(self: Message; key: string; default_value: int64; index: int): int64 =
+  var data: pointer
+  var dlen: int
+  var code: TypeCode
+  var found: bool
+  found = self.find_data(key, code, data, dlen, index)
+  if (not found) or (code != INT64_TYPE):
+    return default_value
+  assert dlen == int64.sizeof
+  result = cast[ptr int64](data)[]
+  
+proc try_find_uint8*(self: Message; key: string; default_value: uint8; index: int): uint8 =
+  var data: pointer
+  var dlen: int
+  var code: TypeCode
+  var found: bool
+  found = self.find_data(key, code, data, dlen, index)
+  if (not found) or (code != UINT8_TYPE):
+    return default_value
+  assert dlen == uint8.sizeof
+  result = cast[ptr uint8](data)[]
+  
+proc try_find_uint16*(self: Message; key: string; default_value: uint16; index: int): uint16 =
+  var data: pointer
+  var dlen: int
+  var code: TypeCode
+  var found: bool
+  found = self.find_data(key, code, data, dlen, index)
+  if (not found) or (code != UINT16_TYPE):
+    return default_value
+  assert dlen == uint16.sizeof
+  result = cast[ptr uint16](data)[]
+  
+proc try_find_uint32*(self: Message; key: string; default_value: uint32; index: int): uint32 =
+  var data: pointer
+  var dlen: int
+  var code: TypeCode
+  var found: bool
+  found = self.find_data(key, code, data, dlen, index)
+  if (not found) or (code != UINT32_TYPE):
+    return default_value
+  assert dlen == uint32.sizeof
+  result = cast[ptr uint32](data)[]
+  
+proc try_find_uint64*(self: Message; key: string; default_value: uint64; index: int): uint64 =
+  var data: pointer
+  var dlen: int
+  var code: TypeCode
+  var found: bool
+  found = self.find_data(key, code, data, dlen, index)
+  if (not found) or (code != UINT64_TYPE):
+    return default_value
+  assert dlen == uint64.sizeof
+  result = cast[ptr uint64](data)[]
+  
+proc try_find_float32*(self: Message; key: string; default_value: float32; index: int): float32 =
+  var data: pointer
+  var dlen: int
+  var code: TypeCode
+  var found: bool
+  found = self.find_data(key, code, data, dlen, index)
+  if (not found) or (code != FLOAT_TYPE):
+    return default_value
+  assert dlen == float32.sizeof
+  result = cast[ptr float32](data)[]
+  
+proc try_find_float64*(self: Message; key: string; default_value: float64; index: int): float64 =
+  var data: pointer
+  var dlen: int
+  var code: TypeCode
+  var found: bool
+  found = self.find_data(key, code, data, dlen, index)
+  if (not found) or (code != DOUBLE_TYPE):
+    return default_value
+  assert dlen == float64.sizeof
+  result = cast[ptr float64](data)[]
+  
+proc try_find_pointer*(self: Message; key: string; default_value: pointer; index: int): pointer =
+  var data: pointer
+  var dlen: int
+  var code: TypeCode
+  var found: bool
+  found = self.find_data(key, code, data, dlen, index)
+  if (not found) or (code != POINTER_TYPE):
+    return default_value
+  assert dlen == pointer.sizeof
+  result = cast[ptr pointer](data)[]
+  
+# [[[end]]]
+
+proc try_find_string*(self: Message; key: string; default_value: string; index: int): string =
+  var data: pointer
+  var dlen: int
+  var code: TypeCode
+  var found: bool
+  found = self.find_data(key, code, data, dlen, index)
+  if (not found) or (code != STRING_TYPE):
+    return default_value
+  set_len(result, dlen)
+  copymem(addr result[0], data, dlen)
+  
