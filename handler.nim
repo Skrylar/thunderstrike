@@ -175,6 +175,13 @@ proc stop_watching*(self: Handler; watcher: Handler; what: uint32) =
     if i >= 0:
         self.fwatchers.delete(i)
 
+proc send_notices*(self: Handler; what: uint32; message: ref Message = nil) =
+    if self.fsend_notices != nil:
+        self.fsend_notices(what, message)
+
+proc is_watched*(self: Handler): bool =
+    return len(self.fwatchers) > 0
+
 var h = make_handler()
 h.stop_watching(h, 1)
 
