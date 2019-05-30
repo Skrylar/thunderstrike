@@ -8,7 +8,7 @@ type
                                  index: int32;
                                  specifier: ref Message;
                                  what: int32;
-                                 property: string): ref Handler {.closure.}
+                                 property: string): Handler {.closure.}
     SendNoticesHook* = proc(what: uint32;
                             message: ref Message = nil) {.closure.}
 
@@ -107,7 +107,7 @@ proc resolve_specifier*(self: Handler;
                         index: int32;
                         specifier: ref Message;
                         what: int32;
-                        property: string): ref Handler =
+                        property: string): Handler =
     return self.fresolve_specifier(message, index, specifier, what, property)
 
 proc name*(self: Handler): string {.inline.} =
