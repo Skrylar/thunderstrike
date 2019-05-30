@@ -143,29 +143,40 @@ proc send_notices_hook*(self: var Handler;
 
 #proc start_watching*(watcher: ref Messenger; what: uint32) =
     #assert(false, "Not implemented.")
+
 proc start_watching*(self: Handler; watcher: Handler; what: uint32) =
     assert(false, "Not implemented.")
+
 #proc start_watching_all*(self: Handler; watcher: Messenger) =
     #assert(false, "Not implemented.")
+
 proc start_watching_all*(self: Handler; watcher: Handler) =
     assert(false, "Not implemented.")
+
+#proc stop_watching_all*(self: Handler; watcher: Messenger) =
+    #assert(false, "Not implemented.")
+
+proc stop_watching_all*(self: Handler; watcher: Handler) =
+    var i = 0
+    while i < len(self.fwatchers):
+        if self.fwatchers[i].handler == watcher:
+            self.fwatchers.delete(i)
+        else:
+            inc i
+
 #proc stop_watching*(self: Handler; watcher: Messenger; what: uint32) =
     #assert(false, "Not implemented.")
 
 proc stop_watching*(self: Handler; watcher: Handler; what: uint32) =
+    if what == 0:
+        stop_watching_all(self, watcher)
+        return
+
     var watcher = HandlerWatcher(state: what, handler: watcher)
     var i = self.fwatchers.find(watcher)
     if i >= 0:
         self.fwatchers.delete(i)
 
-#proc stop_watching_all*(self: Handler; watcher: Messenger) =
-        #assert(false, "Not implemented.")
-proc stop_watching_all*(self: Handler; watcher: Handler) =
-    assert(false, "Not implemented.")
-
-
-
-
 var h = make_handler()
-h.start_watching_all(h)
+h.stop_watching(h, 1)
 
