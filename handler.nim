@@ -12,6 +12,11 @@ type
     SendNoticesHook* = proc(what: uint32;
                             message: ref Message = nil) {.closure.}
 
+    HandlerWatcher = object
+        #messenger*: Messenger
+        handler*: Handler
+        state*: uint32
+
     Handler* = ref object of RootObj
         fmessage_received*: MessageReceivedHook
         fget_supported_suites*: SupportedSuitesHook
@@ -20,6 +25,7 @@ type
         flooper: Looper
         ffilters: seq[MessageFilter]
         fname: string
+        fwatchers: seq[HandlerWatcher]
 
     Looper* = ref object of Handler
 
@@ -59,6 +65,12 @@ proc lock*(self: Looper; timeout: BigTime = INFINITE_TIMEOUT): bool =
 
 proc unlock*(self: Looper) =
     discard
+
+# Handler watcher
+# ===============
+
+proc `==`(self, other: HandlerWatcher): bool =
+    return (self.handler == other.handler) and (self.state == other.state)
 
 # Handlers
 # ========
@@ -139,10 +151,15 @@ proc start_watching_all*(self: Handler; watcher: Handler) =
     assert(false, "Not implemented.")
 #proc stop_watching*(self: Handler; watcher: Messenger; what: uint32) =
     #assert(false, "Not implemented.")
+
 proc stop_watching*(self: Handler; watcher: Handler; what: uint32) =
-    assert(false, "Not implemented.")
+    var watcher = HandlerWatcher(state: what, handler: watcher)
+    var i = self.fwatchers.find(watcher)
+    if i >= 0:
+        self.fwatchers.delete(i)
+
 #proc stop_watching_all*(self: Handler; watcher: Messenger) =
-    #assert(false, "Not implemented.")
+        #assert(false, "Not implemented.")
 proc stop_watching_all*(self: Handler; watcher: Handler) =
     assert(false, "Not implemented.")
 
