@@ -46,7 +46,7 @@ type
     FilterHook* = proc(message: ref Message;
                        target: var ref Handler) {.closure.}
 
-    MessageFilter* = object
+    MessageFilter* = ref object
         ffilter_any: bool
         ffilter: uint32
         fhook: FilterHook
@@ -123,11 +123,14 @@ proc filter_list*(self: Handler): seq[MessageFilter] {.inline.} =
 proc `filter_list=`*(self: var Handler; value: seq[MessageFilter]) {.inline.} =
     self.ffilters = value
 
-proc add_filter*(filter: MessageFilter) =
-    assert(false, "Not implemented.")
+proc add_filter*(self: Handler; filter: MessageFilter) =
+    if not (filter in self.ffilters):
+        self.ffilters.add(filter)
 
-proc remove_filter*(filter: MessageFilter) =
-    assert(false, "Not implemented.")
+proc remove_filter*(self: Handler; filter: MessageFilter) =
+    var i = self.ffilters.find(filter)
+    if i >= 0:
+        self.ffilters.delete(i)
 
 proc next_handler*(self: ref Handler): ref Handler {.inline.} =
     assert(false, "Not implemented.")
