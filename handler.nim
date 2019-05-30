@@ -170,10 +170,6 @@ proc stop_watching_all*(self: Handler; watcher: Handler) =
     #assert(false, "Not implemented.")
 
 proc stop_watching*(self: Handler; watcher: Handler; what: uint32) =
-    if what == 0:
-        stop_watching_all(self, watcher)
-        return
-
     var watcher = HandlerWatcher(state: what, handler: watcher)
     var i = self.fwatchers.find(watcher)
     if i >= 0:
