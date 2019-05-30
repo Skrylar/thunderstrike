@@ -151,7 +151,9 @@ proc start_watching*(self: Handler; watcher: Handler; what: uint32) =
     #assert(false, "Not implemented.")
 
 proc start_watching_all*(self: Handler; watcher: Handler) =
-    assert(false, "Not implemented.")
+    var watcher = HandlerWatcher(state: 0, handler: watcher)
+    if not (watcher in self.fwatchers):
+        self.fwatchers.add(watcher)
 
 #proc stop_watching_all*(self: Handler; watcher: Messenger) =
     #assert(false, "Not implemented.")
