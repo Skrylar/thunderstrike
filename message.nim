@@ -6,7 +6,6 @@ type
         flags: uint8
         what: uint32
         block_size: int32 # binary versioning field
-        first_specifier: uint32
         first_field: uint32
 
     MessageSpecifierBlock = object
@@ -25,6 +24,7 @@ type
         next_value: uint32
 
     Message* = object
+        specifiers: seq[Message]
         buffer: seq[byte]
 
 # Messages
@@ -38,7 +38,6 @@ proc initialize(self: var MessageBlock; what: uint32) =
     self.flags = 0
     self.what = what
     self.block_size = MessageBlock.sizeof.int32
-    self.first_specifier = 0
     self.first_field = 0
 
 proc make_message*(what: uint32): Message =
@@ -241,34 +240,9 @@ proc find_data*(
 #messenger
 #flat
 
-var msg = make_message(0)
-assert(not msg.has_field("baguette"))
-msg.add_data("baguette", 0, nil, 0)
-var delicious = true
-assert(msg.count_values("delicious") == 0)
-msg.add_data("delicious", 38, addr delicious, delicious.sizeof)
-assert(msg.has_field("delicious"))
-assert(msg.count_values("delicious") == 1)
-delicious = false
-msg.add_data("delicious", 38, addr delicious, delicious.sizeof)
-assert(msg.count_values("delicious") == 2)
-msg.add_data("delicious", 38, addr delicious, delicious.sizeof)
-assert(msg.count_values("delicious") == 3)
-assert(msg.has_field("baguette"))
-
-var code: TypeCode
-var data: pointer
-var dlen: int
-var found = msg.find_data("delicious", code, data, dlen)
-assert(code == 38)
-assert(found == true)
-assert(dlen == bool.sizeof)
-assert(cast[ptr bool](data)[] == true)
-
-
 # [[[cog
 # for x in pairs:
-#   cog.outl("""proc try_find_{0}*(self: Message; key: string; default_value: {0}; index: int): {0} =
+#   cog.outl("""proc try_find_{0}*(self: Message; key: string; default_value: {0}; index: int = 0): {0} =
 #   var data: pointer
 #   var dlen: int
 #   var code: TypeCode
@@ -280,7 +254,7 @@ assert(cast[ptr bool](data)[] == true)
 #   result = cast[ptr {0}](data)[]
 #   """.format(x[0], x[1]))
 # ]]]
-proc try_find_bool*(self: Message; key: string; default_value: bool; index: int): bool =
+proc try_find_bool*(self: Message; key: string; default_value: bool; index: int = 0): bool =
   var data: pointer
   var dlen: int
   var code: TypeCode
@@ -291,7 +265,7 @@ proc try_find_bool*(self: Message; key: string; default_value: bool; index: int)
   assert dlen == bool.sizeof
   result = cast[ptr bool](data)[]
   
-proc try_find_int8*(self: Message; key: string; default_value: int8; index: int): int8 =
+proc try_find_int8*(self: Message; key: string; default_value: int8; index: int = 0): int8 =
   var data: pointer
   var dlen: int
   var code: TypeCode
@@ -302,7 +276,7 @@ proc try_find_int8*(self: Message; key: string; default_value: int8; index: int)
   assert dlen == int8.sizeof
   result = cast[ptr int8](data)[]
   
-proc try_find_int16*(self: Message; key: string; default_value: int16; index: int): int16 =
+proc try_find_int16*(self: Message; key: string; default_value: int16; index: int = 0): int16 =
   var data: pointer
   var dlen: int
   var code: TypeCode
@@ -313,7 +287,7 @@ proc try_find_int16*(self: Message; key: string; default_value: int16; index: in
   assert dlen == int16.sizeof
   result = cast[ptr int16](data)[]
   
-proc try_find_int32*(self: Message; key: string; default_value: int32; index: int): int32 =
+proc try_find_int32*(self: Message; key: string; default_value: int32; index: int = 0): int32 =
   var data: pointer
   var dlen: int
   var code: TypeCode
@@ -324,7 +298,7 @@ proc try_find_int32*(self: Message; key: string; default_value: int32; index: in
   assert dlen == int32.sizeof
   result = cast[ptr int32](data)[]
   
-proc try_find_int64*(self: Message; key: string; default_value: int64; index: int): int64 =
+proc try_find_int64*(self: Message; key: string; default_value: int64; index: int = 0): int64 =
   var data: pointer
   var dlen: int
   var code: TypeCode
@@ -335,7 +309,7 @@ proc try_find_int64*(self: Message; key: string; default_value: int64; index: in
   assert dlen == int64.sizeof
   result = cast[ptr int64](data)[]
   
-proc try_find_uint8*(self: Message; key: string; default_value: uint8; index: int): uint8 =
+proc try_find_uint8*(self: Message; key: string; default_value: uint8; index: int = 0): uint8 =
   var data: pointer
   var dlen: int
   var code: TypeCode
@@ -346,7 +320,7 @@ proc try_find_uint8*(self: Message; key: string; default_value: uint8; index: in
   assert dlen == uint8.sizeof
   result = cast[ptr uint8](data)[]
   
-proc try_find_uint16*(self: Message; key: string; default_value: uint16; index: int): uint16 =
+proc try_find_uint16*(self: Message; key: string; default_value: uint16; index: int = 0): uint16 =
   var data: pointer
   var dlen: int
   var code: TypeCode
@@ -357,7 +331,7 @@ proc try_find_uint16*(self: Message; key: string; default_value: uint16; index: 
   assert dlen == uint16.sizeof
   result = cast[ptr uint16](data)[]
   
-proc try_find_uint32*(self: Message; key: string; default_value: uint32; index: int): uint32 =
+proc try_find_uint32*(self: Message; key: string; default_value: uint32; index: int = 0): uint32 =
   var data: pointer
   var dlen: int
   var code: TypeCode
@@ -368,7 +342,7 @@ proc try_find_uint32*(self: Message; key: string; default_value: uint32; index: 
   assert dlen == uint32.sizeof
   result = cast[ptr uint32](data)[]
   
-proc try_find_uint64*(self: Message; key: string; default_value: uint64; index: int): uint64 =
+proc try_find_uint64*(self: Message; key: string; default_value: uint64; index: int = 0): uint64 =
   var data: pointer
   var dlen: int
   var code: TypeCode
@@ -379,7 +353,7 @@ proc try_find_uint64*(self: Message; key: string; default_value: uint64; index: 
   assert dlen == uint64.sizeof
   result = cast[ptr uint64](data)[]
   
-proc try_find_float32*(self: Message; key: string; default_value: float32; index: int): float32 =
+proc try_find_float32*(self: Message; key: string; default_value: float32; index: int = 0): float32 =
   var data: pointer
   var dlen: int
   var code: TypeCode
@@ -390,7 +364,7 @@ proc try_find_float32*(self: Message; key: string; default_value: float32; index
   assert dlen == float32.sizeof
   result = cast[ptr float32](data)[]
   
-proc try_find_float64*(self: Message; key: string; default_value: float64; index: int): float64 =
+proc try_find_float64*(self: Message; key: string; default_value: float64; index: int = 0): float64 =
   var data: pointer
   var dlen: int
   var code: TypeCode
@@ -401,7 +375,7 @@ proc try_find_float64*(self: Message; key: string; default_value: float64; index
   assert dlen == float64.sizeof
   result = cast[ptr float64](data)[]
   
-proc try_find_pointer*(self: Message; key: string; default_value: pointer; index: int): pointer =
+proc try_find_pointer*(self: Message; key: string; default_value: pointer; index: int = 0): pointer =
   var data: pointer
   var dlen: int
   var code: TypeCode
@@ -414,7 +388,7 @@ proc try_find_pointer*(self: Message; key: string; default_value: pointer; index
   
 # [[[end]]]
 
-proc try_find_string*(self: Message; key: string; default_value: string; index: int): string =
+proc try_find_string*(self: Message; key: string; default_value: string; index: int = 0): string =
   var data: pointer
   var dlen: int
   var code: TypeCode
@@ -424,4 +398,15 @@ proc try_find_string*(self: Message; key: string; default_value: string; index: 
     return default_value
   set_len(result, dlen)
   copymem(addr result[0], data, dlen)
-  
+
+proc push_specifier*(self: var Message; specifier: string) =
+    var s = make_message(MSG_SPECIFIER)
+    s.add("name", specifier)
+    self.specifiers.add(s)
+
+proc pop_specifier*(self: var Message): string =
+    if self.specifiers.len == 0:
+        return ""
+    var m = self.specifiers.pop()
+    result = m.try_find_string("name", "")
+
