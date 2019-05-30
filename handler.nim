@@ -145,15 +145,15 @@ proc send_notices_hook*(self: var Handler;
     #assert(false, "Not implemented.")
 
 proc start_watching*(self: Handler; watcher: Handler; what: uint32) =
-    assert(false, "Not implemented.")
+    var watcher = HandlerWatcher(state: what, handler: watcher)
+    if not (watcher in self.fwatchers):
+        self.fwatchers.add(watcher)
 
 #proc start_watching_all*(self: Handler; watcher: Messenger) =
     #assert(false, "Not implemented.")
 
 proc start_watching_all*(self: Handler; watcher: Handler) =
-    var watcher = HandlerWatcher(state: 0, handler: watcher)
-    if not (watcher in self.fwatchers):
-        self.fwatchers.add(watcher)
+    start_watching(self, watcher, WATCH_ALL)
 
 #proc stop_watching_all*(self: Handler; watcher: Messenger) =
     #assert(false, "Not implemented.")
