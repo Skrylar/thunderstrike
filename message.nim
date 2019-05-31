@@ -468,6 +468,13 @@ proc pop_specifier*(self: var Message): string =
     var m = self.specifiers.pop()
     result = m.try_find_string("name", "")
 
+# TODO Delete data methods
+# TODO Replace data methods
+# The above two have the crinkle that they were not in the Be
+# book, and the message format we're using was designed around an
+# append-only premise.  We could implement a wasteful version easily,
+# while a less wasteful method could require a little finesse.
+
 proc send_reply*(self: Message; command: uint32; reply_to: Handler = nil; timeout: BigTime = INFINITE_TIMEOUT) =
     discard # TODO
 
@@ -483,17 +490,44 @@ proc send_reply*(self: Message; command: uint32; reply_to_reply: Message) =
 proc send_reply*(self: Message; reply: Message; reply_to_reply: Message; timeout: BigTime = INFINITE_TIMEOUT) =
     discard # TODO
 
+proc is_empty*(self: Message): bool =
+    return false # TODO
+
+proc is_reply*(self: Message): bool =
+    return false # TODO
+
+proc is_system*(self: Message): bool =
+    return false # TODO
+
+proc is_source_waiting*(self: Message): bool =
+    return false # TODO
+
+proc is_source_remote*(self: Message): bool =
+    return false # TODO
+
+proc was_delivered*(self: Message): bool =
+    return false # TODO
+
+proc was_dropped*(self: Message): bool =
+    return false # TODO
+
+proc previous*(self: Message): ref Message =
+    return nil # TODO
+
+proc drop_point*(self: Message; offset: ref Point = 0): Point =
+    discard # TODO
+
 # Looper
 # ======
 
 proc lock*(self: Looper; timeout: BigTime = INFINITE_TIMEOUT): bool =
-    discard
+    discard # TODO
 
 proc unlock*(self: Looper) =
-    discard
+    discard # TODO
 
 proc locked*(self: Looper): bool =
-    return false
+    return false # TODO
 
 # Handler watcher
 # ===============
@@ -635,5 +669,3 @@ proc send_notices*(self: Handler; what: uint32; message: ref Message = nil) =
     if self.fsend_notices != nil:
         self.fsend_notices(what, message)
 
-var h = make_handler()
-h.stop_watching(h, 1)
