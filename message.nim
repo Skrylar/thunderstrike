@@ -502,7 +502,8 @@ proc send_reply*(self: Message; reply: Message; reply_to_reply: Message; timeout
     discard # TODO
 
 proc is_empty*(self: Message): bool =
-    return false # TODO
+    var head = cast[ptr MessageBlock](unsafeaddr self.buffer[0])
+    return head.first_field == 0
 
 proc is_reply*(self: Message): bool =
     return self.prev != nil
