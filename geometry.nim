@@ -63,31 +63,31 @@ proc `-=`*[T](self: var Point[T]; other: Point[T]): Point[T] =
 # Flattenable
 # +++++++++++
 
-proc flatten(self: buffer: pointer; headroom: uint) =
-    # TODO
+proc flatten*(self: Point; headroom: uint) =
+    discard # TODO
 
-proc unflatten(self: buffer; buffer: pointer; size: uint) =
-    # TODO
+proc unflatten*(self: Point; buffer: pointer; size: uint) =
+    discard # TODO
 
-proc flattened_size(x: Point): int =
-    return sizeof(x.x)+sizeof(s.y)
+proc flattened_size*(x: Point): int =
+    return sizeof(x.x)+sizeof(x.y)
 
-proc is_fixed_size(x: typedesc[Point]): bool {.inline.} =
+proc is_fixed_size*(x: typedesc[Point]): bool {.inline.} =
     return true
 
-proc is_fixed_size(x: Point): bool {.inline.} =
+proc is_fixed_size*(x: Point): bool {.inline.} =
     return true
 
-proc allows_type_code(x: typedesc[Point]; code: TypeCode): bool =
+proc allows_type_code*(x: typedesc[Point]; code: TypeCode): bool =
     return code == POINT_TYPE
 
-proc allows_type_code(x: Point; code: TypeCode): bool =
+proc allows_type_code*(x: Point; code: TypeCode): bool =
     return allows_type_code(x.type, code)
 
-proc type_code(x: typedesc[Point]): TypeCode {.inline.} =
+proc type_code*(x: typedesc[Point]): TypeCode {.inline.} =
     return POINT_TYPE
 
-proc type_code(x: Point): TypeCode {.inline.} =
+proc type_code*(x: Point): TypeCode {.inline.} =
     return type_code(x.type)
 
 # RECTANGLES
