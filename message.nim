@@ -70,6 +70,7 @@ type
 
     MessageFieldBlock = object
         flags: uint8
+        prev: ref Message
         name_length: uint16 # name is directly after field block
         typecode: TypeCode
         next_value: uint32
@@ -504,25 +505,25 @@ proc is_empty*(self: Message): bool =
     return false # TODO
 
 proc is_reply*(self: Message): bool =
-    return false # TODO
+    return self.prev != nil
 
 proc is_system*(self: Message): bool =
     return FromSystem in self.flags
 
 proc is_source_waiting*(self: Message): bool =
-    return false # TODO
+    return ExpectingReply in self.flags
 
 proc is_source_remote*(self: Message): bool =
     return FromRemote in self.flags
 
 proc was_delivered*(self: Message): bool =
-    return false # TODO
+    return Delivered in self.flags
 
 proc was_dropped*(self: Message): bool =
-    return false # TODO
+    return FromDragAndDrop in self.flags
 
 proc previous*(self: Message): ref Message =
-    return nil # TODO
+    return self.prev
 
 proc drop_point*(self: Message; offset: ref Point = 0): Point =
     discard # TODO
