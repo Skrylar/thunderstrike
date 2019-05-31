@@ -77,25 +77,38 @@ type
 
     MessageFieldValueBlock = object
         block_size: uint32
+        prev: ref Message
         next_value: uint32
 
     MessageFlag* = enum
-        FromRemote
-        FromSystem
+        FromRemote      # Message is from a remote system or thread.
+        FromSystem      # Message is from the system.
+        FromDragAndDrop # Message is the result of D&D.
+        Delivered       # Message was delivered to a target.
+        ExpectingReply  # Sender is awaiting a response.
 
     Message* = object
-        flags: set[MessageFlag]
-        specifiers: seq[Message]
-        buffer: seq[byte]
+        flags: set[MessageFlag]  # Special flags
+        prev: ref Message        # Message we are a reply to
+        specifiers: seq[Message] # Scripting specifiers
+        buffer: seq[byte]        # Message bytes
 
     Messenger* = ref object
 
-# Messages
+# MESSAGES
 # ========
 
+# TODO Delete data methods
+# TODO Replace data methods
+# ^The above two have the crinkle that they were not in the Be
+# book, and the message format we're using was designed around an
+# append-only premise.  We could implement a wasteful version easily,
+# while a less wasteful method could require a little finesse.
+
+# TODO make flattenable
 # TODO put in bounds checking on deref
-# ^ not a big deal for trusted code but if we start doing RPC with arbitrary
-# software some of it might be defective
+# ^ not a big deal for trusted code but if we start doing RPC with
+# arbitrary software some of it might be defective
 
 proc initialize(self: var MessageBlock; what: uint32) =
     self.flags = 0
@@ -296,7 +309,6 @@ proc find_data*(
         length = value.block_size.int
         return true
 
-#string
 #point
 #rect
 #message
@@ -472,13 +484,6 @@ proc pop_specifier*(self: var Message): string =
         return ""
     var m = self.specifiers.pop()
     result = m.try_find_string("name", "")
-
-# TODO Delete data methods
-# TODO Replace data methods
-# The above two have the crinkle that they were not in the Be
-# book, and the message format we're using was designed around an
-# append-only premise.  We could implement a wasteful version easily,
-# while a less wasteful method could require a little finesse.
 
 proc send_reply*(self: Message; command: uint32; reply_to: Handler = nil; timeout: BigTime = INFINITE_TIMEOUT) =
     discard # TODO
