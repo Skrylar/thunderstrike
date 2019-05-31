@@ -24,6 +24,7 @@ type
         fsend_notices*: SendNoticesHook
         flooper: Looper
         ffilters: seq[MessageFilter]
+        fnext_handler: Handler
         fname: string
         fwatchers: seq[HandlerWatcher]
 
@@ -66,6 +67,9 @@ proc lock*(self: Looper; timeout: BigTime = INFINITE_TIMEOUT): bool =
 proc unlock*(self: Looper) =
     discard
 
+proc locked*(self: Looper): bool =
+    return false
+
 # Handler watcher
 # ===============
 
@@ -75,9 +79,20 @@ proc `==`(self, other: HandlerWatcher): bool =
 # Handlers
 # ========
 
+proc do_send_notices(self: Handler; what: uint32; message: ref Message = nil) =
+    discard
+
 proc init*(self: Handler; name: string; default_handlers: bool) =
     self.fname = name
-    discard default_handlers # ... for now
+    if not default_handlers: return
+    self.fget_supported_suites = proc(data: ref Message) =
+        # no supported suites, for now
+        discard
+    self.fresolve_specifier = proc(message: ref Message; index: int32; specifier: ref Message; what: int32; property: string): Handler =
+        # no specifiers to resolve at this level
+        return self
+    self.fsend_notices = proc(what: uint32; message: ref Message) =
+        self.do_send_notices(what, message)
 
 proc make_handler*(name: string = ""; default_handlers: bool = true): Handler =
     new(result)
@@ -113,7 +128,7 @@ proc resolve_specifier*(self: Handler;
 proc name*(self: Handler): string {.inline.} =
     return self.fname
 
-proc `name=`*(self: var Handler; value: string) =
+proc `name=`*(self: Handler; value: string) {.inline.} =
     # XXX do we need to tell anyone else we're renamed now?
     self.fname = value
 
@@ -132,11 +147,14 @@ proc remove_filter*(self: Handler; filter: MessageFilter) =
     if i >= 0:
         self.ffilters.delete(i)
 
-proc next_handler*(self: ref Handler): ref Handler {.inline.} =
-    assert(false, "Not implemented.")
+proc next_handler*(self :Handler): Handler {.inline.} =
+    return self.fnext_handler
 
-proc `next_handler=`*(self: ref Handler; value: ref Handler) {.inline.} =
-    assert(false, "Not implemented.")
+proc `next_handler=`*(self, value: Handler) {.inline.} =
+    assert(self.flooper != nil)
+    assert(locked(self.flooper))
+    assert(value.flooper == self.flooper)
+    self.fnext_handler = value
 
 proc send_notices_hook*(self: var Handler;
                         what: uint32;
