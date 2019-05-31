@@ -79,8 +79,20 @@ proc `==`(self, other: HandlerWatcher): bool =
 # Handlers
 # ========
 
+proc is_watched*(self: Handler): bool =
+    return len(self.fwatchers) > 0
+
+proc message_received*(self: Handler; message: ref Message) =
+    if self.fmessage_received != nil:
+        self.fmessage_received(message)
+
 proc do_send_notices(self: Handler; what: uint32; message: ref Message = nil) =
-    discard
+    # if nobody is in the forest, the tree doesn't make a sound...
+    if not self.is_watched: return
+    for x in self.fwatchers:
+        if (x.state == WATCH_ALL) or (x.state == what):
+            if x.handler != nil:
+                x.handler.message_received(message)
 
 proc init*(self: Handler; name: string; default_handlers: bool) =
     self.fname = name
@@ -97,10 +109,6 @@ proc init*(self: Handler; name: string; default_handlers: bool) =
 proc make_handler*(name: string = ""; default_handlers: bool = true): Handler =
     new(result)
     result.init(name, default_handlers)
-
-proc message_received*(self: Handler; message: ref Message) =
-    if self.fmessage_received != nil:
-        self.fmessage_received(message)
 
 proc get_supported_suites*(self: Handler; message: ref Message) =
     if self.fget_supported_suites != nil:
@@ -199,9 +207,6 @@ proc stop_watching*(self: Handler; watcher: Handler; what: uint32) =
 proc send_notices*(self: Handler; what: uint32; message: ref Message = nil) =
     if self.fsend_notices != nil:
         self.fsend_notices(what, message)
-
-proc is_watched*(self: Handler): bool =
-    return len(self.fwatchers) > 0
 
 var h = make_handler()
 h.stop_watching(h, 1)
