@@ -1,5 +1,5 @@
 
-import coretypes
+import coretypes, geometry
 
 type
     MessageReceivedHook* = proc(message: ref Message) {.closure.}
@@ -79,7 +79,12 @@ type
         block_size: uint32
         next_value: uint32
 
+    MessageFlag* = enum
+        FromRemote
+        FromSystem
+
     Message* = object
+        flags: set[MessageFlag]
         specifiers: seq[Message]
         buffer: seq[byte]
 
@@ -497,13 +502,13 @@ proc is_reply*(self: Message): bool =
     return false # TODO
 
 proc is_system*(self: Message): bool =
-    return false # TODO
+    return FromSystem in self.flags
 
 proc is_source_waiting*(self: Message): bool =
     return false # TODO
 
 proc is_source_remote*(self: Message): bool =
-    return false # TODO
+    return FromRemote in self.flags
 
 proc was_delivered*(self: Message): bool =
     return false # TODO
