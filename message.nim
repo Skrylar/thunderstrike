@@ -31,6 +31,7 @@ type
     Looper* = ref object of Handler
         fpreferred_handler: Handler
         fhandlers: seq[Handler]
+        fcurrent_message: ref Message
 
     MessageSource* = enum
         AnySource
@@ -563,7 +564,9 @@ proc remove_handler*(self: Looper; handler: Handler) =
     if index >= 0:
         self.fhandlers.delete(index)
 
-proc current_message*(self: Looper): Message = discard # TODO
+proc current_message*(self: Looper): ref Message =
+    return self.fcurrent_message
+
 proc detach_current_message*(self: Looper): Message = discard # TODO
 
 proc count_handlers*(self: Looper): int32 =
