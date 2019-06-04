@@ -758,6 +758,8 @@ proc post_message*(self: Looper; message: Message; handler, reply_to: Handler) =
     if handler == nil: return
     if handler.looper != self: return
 
+    # TODO deal with reply_to
+
     if handler.passes_filters(message):
         handler.message_received(message)
 
