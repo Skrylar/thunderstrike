@@ -12,6 +12,7 @@ const
     WATCH_ALL* = high(uint32)
 
     MESSAGE_NOT_UNDERSTOOD* = high(uint32)
+    NO_REPLY* = high(uint32)-1
 
     # [[[cog
     # cons = """ANY_TYPE CHAR_TYPE INT8_TYPE INT16_TYPE INT32_TYPE INT64_TYPE

@@ -39,7 +39,7 @@ type
         specifiers: seq[Message] # Scripting specifiers
         buffer: seq[byte]        # Message bytes
 
-    MessageReceivedHook* = proc(message: Message) {.closure.}
+    MessageReceivedHook* = proc(message, immediate_reply: Message) {.closure.}
     SupportedSuitesHook* = proc(message: Message) {.closure.}
     ResolveSpecifierHook* = proc(message: Message;
                                  index: int32;
@@ -100,6 +100,9 @@ type
 
     Messenger* = ref object
 
+proc looper*(self: Handler): Looper {.inline.} =
+    return self.flooper
+
 # MESSAGES
 # ========
 
@@ -127,6 +130,16 @@ proc make_message*(what: uint32): Message =
     var x: ptr MessageBlock
     x = cast[ptr MessageBlock](addr result.buffer[0])
     x[].initialize(what)
+
+proc what*(self: Message): uint32 = 
+    var x: ptr MessageBlock
+    x = cast[ptr MessageBlock](addr self.buffer[0])
+    return x.what
+
+proc `what=`*(self: Message; value: uint32) =
+    var x: ptr MessageBlock
+    x = cast[ptr MessageBlock](addr self.buffer[0])
+    x.what = value
 
 iterator fields(self: Message): ptr MessageFieldBlock =
     # NB: we aren't modifying the datablocks, so unsafeaddr is fine
@@ -490,20 +503,83 @@ proc pop_specifier*(self: var Message): string =
     var m = self.specifiers.pop()
     result = m.try_find_string("name", "")
 
+proc passes_filters*(self: Handler; message: Message): bool =
+    # XXX should check list of filters and run them against the
+    # message; then return if this handler is willing to accept the
+    # message after all that
+    return true # TODO
+
+proc message_received*(self: Handler; message: Message; immediate_reply: Message = nil) =
+    if self.fmessage_received != nil:
+        self.fmessage_received(message, immediate_reply)
+
+proc post_message*(self: Looper; message: Message) =
+    # TODO once we are threaded, post to message queue
+    # TODO what should we do if we're running on async?
+
+    var h = self.fpreferred_handler
+    if h == nil: return
+    if h.passes_filters(message):
+        h.message_received(message)
+
+proc post_message*(self: Looper; message: Message; handler, reply_to: Handler) =
+    # TODO once we are threaded, post to message queue
+    # TODO what should we do if we're running on async?
+
+    # we can handle this at runtime by failing silently, but its bad
+    # code so we should whip the programmer with a stick at debug time
+    assert(handler != nil)
+    assert(handler.looper == self)
+    if handler == nil: return
+    if handler.looper != self: return
+
+    message.reply_to = reply_to
+    if handler.passes_filters(message):
+        handler.message_received(message)
+
+proc post_message*(self: Looper; command: uint32) =
+    var msg = make_message(command)
+    self.post_message(msg)
+
+proc post_message*(self: Looper; command: uint32; handler, reply_to: Handler) =
+    var msg = make_message(command)
+    self.post_message(msg, handler, reply_to)
+
 proc send_reply*(self: Message; command: uint32; reply_to: Handler = nil; timeout: BigTime = INFINITE_TIMEOUT) =
-    discard # TODO
+    if self.reply_to == nil: return # can't reply
+
+    if self.reply_to.looper != nil:
+        self.reply_to.looper.post_message(command, self.reply_to, reply_to)
+    else:
+        assert(false, "Synchronous reply is not implemented")
 
 proc send_reply*(self: Message; reply: Message; reply_to: Handler = nil; timeout: BigTime = INFINITE_TIMEOUT) =
-    discard # TODO
+    if self.reply_to == nil: return # can't reply
+    reply.prev = self
+    
+    if self.reply_to.looper != nil:
+        self.reply_to.looper.post_message(reply, self.reply_to, reply_to)
+    else:
+        assert(false, "Synchronous reply is not implemented")
 
 proc send_reply*(self: Message; reply: Message; reply_to: Messenger; timeout: BigTime = INFINITE_TIMEOUT) =
     discard # TODO
 
 proc send_reply*(self: Message; command: uint32; reply_to: Message) =
-    discard # TODO
+    reply_to.what = NO_REPLY
+    if self.reply_to == nil: return # can't reply
 
-proc send_reply*(self: Message; reply: Message; reply_to: Message; timeout: BigTime = INFINITE_TIMEOUT) =
-    discard # TODO
+    # this is a command, so it's a special no-data message
+    # TODO profiling to see if a free list of commands is a good idea?
+    var m = make_message(command)
+    m.prev = self
+    self.reply_to.message_received(m, reply_to)
+
+proc send_reply*(self, reply,reply_to: Message; timeout: BigTime = INFINITE_TIMEOUT) =
+    reply_to.what = NO_REPLY
+    if self.reply_to == nil: return # can't reply
+    reply.prev = self
+    self.reply_to.message_received(reply, reply_to)
 
 proc is_empty*(self: Message): bool =
     var head = cast[ptr MessageBlock](unsafeaddr self.buffer[0])
@@ -580,8 +656,7 @@ proc preferred_handler*(self: Looper): Handler {.inline.} =
     return self.fpreferred_handler
 
 proc `preferred_handler=`*(self: Looper; handler: Handler) {.inline.} =
-    # TODO use accessor instead of directly inside
-    assert((handler == self) or (handler.flooper == self),
+    assert((handler == self) or (handler.looper == self),
         "Handler should be the looper, or belong to it.")
     self.fpreferred_handler = handler
 
@@ -596,10 +671,6 @@ proc `==`(self, other: HandlerWatcher): bool =
 
 proc is_watched*(self: Handler): bool =
     return len(self.fwatchers) > 0
-
-proc message_received*(self: Handler; message: Message) =
-    if self.fmessage_received != nil:
-        self.fmessage_received(message)
 
 proc do_send_notices(self: Handler; what: uint32; message: Message = nil) =
     # if nobody is in the forest, the tree doesn't make a sound...
@@ -620,8 +691,11 @@ proc init*(self: Handler; name: string; default_handlers: bool) =
         return self
     self.fsend_notices = proc(what: uint32; message: Message) =
         self.do_send_notices(what, message)
-        self.fmessage_received = proc(message: Message) =
-            message.send_reply(MESSAGE_NOT_UNDERSTOOD)
+        self.fmessage_received = proc(message, imm_reply: Message) =
+            if imm_reply != nil:
+                imm_reply.what = MESSAGE_NOT_UNDERSTOOD
+            else:
+                message.send_reply(MESSAGE_NOT_UNDERSTOOD)
 
 proc make_handler*(name: string = ""; default_handlers: bool = true): Handler =
     new(result)
@@ -638,9 +712,6 @@ proc lock_looper*(self: Handler; timeout: BigTime = INFINITE_TIMEOUT): bool =
 proc unlock_looper*(self: Handler) =
     if self.flooper == nil: return
     self.flooper.unlock()
-
-proc looper*(self: Handler): Looper {.inline.} =
-    return self.flooper
 
 proc resolve_specifier*(self: Handler;
                         message: Message;
@@ -725,12 +796,6 @@ proc send_notices*(self: Handler; what: uint32; message: Message = nil) =
     if self.fsend_notices != nil:
         self.fsend_notices(what, message)
 
-proc passes_filters*(self: Handler; message: Message): bool =
-    # XXX should check list of filters and run them against the
-    # message; then return if this handler is willing to accept the
-    # message after all that
-    return true # TODO
-
 # Looper again
 # ============
 
@@ -738,37 +803,4 @@ proc make_looper*(name: string = ""; default_handlers: bool = true): Looper =
     new(result)
     init(result.Handler, name, default_handlers)
     init(result, name, default_handlers)
-
-proc post_message*(self: Looper; message: Message) =
-    # TODO once we are threaded, post to message queue
-    # TODO what should we do if we're running on async?
-
-    var h = self.fpreferred_handler
-    if h == nil: return
-    if h.passes_filters(message):
-        h.message_received(message)
-
-proc post_message*(self: Looper; message: Message; handler, reply_to: Handler) =
-    # TODO once we are threaded, post to message queue
-    # TODO what should we do if we're running on async?
-
-    # we can handle this at runtime by failing silently, but its bad
-    # code so we should whip the programmer with a stick at debug time
-    assert(handler != nil)
-    assert(handler.looper == self)
-    if handler == nil: return
-    if handler.looper != self: return
-
-    # TODO deal with reply_to
-
-    if handler.passes_filters(message):
-        handler.message_received(message)
-
-proc post_message*(self: Looper; command: uint32) =
-    var msg = make_message(command)
-    self.post_message(msg)
-
-proc post_message*(self: Looper; command: uint32; handler, reply_to: Handler) =
-    var msg = make_message(command)
-    self.post_message(msg, handler, reply_to)
 
