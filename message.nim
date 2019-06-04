@@ -29,6 +29,7 @@ type
         fwatchers: seq[HandlerWatcher]
 
     Looper* = ref object of Handler
+        fpreferred_handler: Handler
 
     MessageSource* = enum
         AnySource
@@ -558,8 +559,15 @@ proc detach_current_message*(self: Looper): Message = discard # TODO
 proc count_handlers*(self: Looper): int32 = discard # TODO
 proc handler_at*(self: Looper; index: int32): Handler = discard # TODO
 proc index_of*(self: Looper; handler: Handler): int32 = discard # TODO
-proc preferred_handler*(self: Looper): Handler = discard # TODO
-proc set_preferred_handler*(self: Looper; handler: Handler) = discard # TODO
+
+proc preferred_handler*(self: Looper): Handler {.inline.} =
+    return self.fpreferred_handler
+
+proc `preferred_handler=`*(self: Looper; handler: Handler) {.inline.} =
+    # TODO use accessor instead of directly inside
+    assert((handler == self) or (handler.flooper == self),
+        "Handler should be the looper, or belong to it.")
+    self.fpreferred_handler = handler
 
 # Handler watcher
 # ===============
