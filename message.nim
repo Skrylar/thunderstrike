@@ -532,6 +532,9 @@ proc drop_point*(self: Message; offset: ref Point = 0): Point =
 # Looper
 # ======
 
+proc init*(self: Looper; name: string = ""; default_handlers: bool = true) =
+    discard # TODO
+
 proc lock*(self: Looper; timeout: BigTime = INFINITE_TIMEOUT): bool =
     # XXX this is only valid until we start supporting threads
     return true
@@ -543,6 +546,20 @@ proc unlock*(self: Looper) =
 proc locked*(self: Looper): bool =
     # XXX this is only valid until we start supporting threads
     return false
+
+proc post_message*(self: Looper; command: uint32) = discard # TODO
+proc post_message*(self: Looper; message: Message) = discard # TODO
+proc post_message*(self: Looper; command: uint32 ; handler, reply_to: Handler) = discard # TODO
+proc post_message*(self: Looper; message: Message; handler, reply_to: Handler) = discard # TODO
+proc add_handler*(self: Looper; message: Message; handler: Handler) = discard # TODO
+proc remove_handler*(self: Looper; message: Message) = discard # TODO
+proc current_message*(self: Looper): Message = discard # TODO
+proc detach_current_message*(self: Looper): Message = discard # TODO
+proc count_handlers*(self: Looper): int32 = discard # TODO
+proc handler_at*(self: Looper; index: int32): Handler = discard # TODO
+proc index_of*(self: Looper; handler: Handler): int32 = discard # TODO
+proc preferred_handler*(self: Looper): Handler = discard # TODO
+proc set_preferred_handler*(self: Looper; handler: Handler) = discard # TODO
 
 # Handler watcher
 # ===============
@@ -683,4 +700,12 @@ proc stop_watching*(self: Handler; watcher: Handler; what: uint32) =
 proc send_notices*(self: Handler; what: uint32; message: ref Message = nil) =
     if self.fsend_notices != nil:
         self.fsend_notices(what, message)
+
+# Looper again
+# ============
+
+proc make_looper*(name: string = ""; default_handlers: bool = true): Looper =
+    new(result)
+    init(result.Handler, name, default_handlers)
+    init(result, name, default_handlers)
 
