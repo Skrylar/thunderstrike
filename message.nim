@@ -550,10 +550,23 @@ proc locked*(self: Looper): bool =
     # XXX this is only valid until we start supporting threads
     return false
 
-proc post_message*(self: Looper; command: uint32) = discard # TODO
-proc post_message*(self: Looper; message: Message) = discard # TODO
-proc post_message*(self: Looper; command: uint32 ; handler, reply_to: Handler) = discard # TODO
-proc post_message*(self: Looper; message: Message; handler, reply_to: Handler) = discard # TODO
+proc post_message*(self: Looper; message: Message) =
+    # TODO once we are threaded, post to message queue
+    # TODO what should we do if we're running on async?
+    discard # TODO
+
+proc post_message*(self: Looper; message: Message; handler, reply_to: Handler) =
+    # TODO once we are threaded, post to message queue
+    # TODO what should we do if we're running on async?
+    discard # TODO
+
+proc post_message*(self: Looper; command: uint32) =
+    var msg = make_message(command)
+    self.post_message(msg)
+
+proc post_message*(self: Looper; command: uint32; handler, reply_to: Handler) =
+    var msg = make_message(command)
+    self.post_message(msg, handler, reply_to)
 
 proc add_handler*(self: Looper; handler: Handler) =
     if not (handler in self.fhandlers):
