@@ -533,13 +533,16 @@ proc drop_point*(self: Message; offset: ref Point = 0): Point =
 # ======
 
 proc lock*(self: Looper; timeout: BigTime = INFINITE_TIMEOUT): bool =
-    discard # TODO
+    # XXX this is only valid until we start supporting threads
+    return true
 
 proc unlock*(self: Looper) =
-    discard # TODO
+    # XXX this is only valid until we start supporting threads
+    discard
 
 proc locked*(self: Looper): bool =
-    return false # TODO
+    # XXX this is only valid until we start supporting threads
+    return false
 
 # Handler watcher
 # ===============
