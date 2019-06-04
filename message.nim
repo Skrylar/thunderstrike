@@ -2,15 +2,51 @@
 import coretypes, geometry
 
 type
-    MessageReceivedHook* = proc(message: ref Message) {.closure.}
-    SupportedSuitesHook* = proc(message: ref Message) {.closure.}
-    ResolveSpecifierHook* = proc(message: ref Message;
+    MessageBlock = object
+        flags: uint8
+        what: uint32
+        block_size: int32 # binary versioning field
+        first_field: uint32
+
+    MessageSpecifierBlock = object
+        flags: uint8
+        next_block: uint32
+
+    MessageFieldBlock = object
+        flags: uint8
+        prev: Message
+        name_length: uint16 # name is directly after field block
+        typecode: TypeCode
+        next_value: uint32
+        next_block: uint32
+
+    MessageFieldValueBlock = object
+        block_size: uint32
+        prev: Message
+        next_value: uint32
+
+    MessageFlag* = enum
+        FromRemote      # Message is from a remote system or thread.
+        FromSystem      # Message is from the system.
+        FromDragAndDrop # Message is the result of D&D.
+        Delivered       # Message was delivered to a target.
+        ExpectingReply  # Sender is awaiting a response.
+
+    Message* = ref object
+        flags: set[MessageFlag]  # Special flags
+        prev: Message        # Message we are a reply to
+        specifiers: seq[Message] # Scripting specifiers
+        buffer: seq[byte]        # Message bytes
+
+    MessageReceivedHook* = proc(message: Message) {.closure.}
+    SupportedSuitesHook* = proc(message: Message) {.closure.}
+    ResolveSpecifierHook* = proc(message: Message;
                                  index: int32;
-                                 specifier: ref Message;
+                                 specifier: Message;
                                  what: int32;
                                  property: string): Handler {.closure.}
     SendNoticesHook* = proc(what: uint32;
-                            message: ref Message = nil) {.closure.}
+                            message: Message = nil) {.closure.}
 
     HandlerWatcher = object
         #messenger*: Messenger
@@ -31,7 +67,7 @@ type
     Looper* = ref object of Handler
         fpreferred_handler: Handler
         fhandlers: seq[Handler]
-        fcurrent_message: ref Message
+        fcurrent_message: Message
 
     MessageSource* = enum
         AnySource
@@ -47,7 +83,7 @@ type
         SkipMessage
         DispatchMessage
 
-    FilterHook* = proc(message: ref Message;
+    FilterHook* = proc(message: Message;
                        target: var ref Handler) {.closure.}
 
     MessageFilter* = ref object
@@ -59,43 +95,7 @@ type
         fmessage_delivery: MessageDelivery
 
     MessageQueue* = object
-        fqueue: seq[ref Message]
-
-    MessageBlock = object
-        flags: uint8
-        what: uint32
-        block_size: int32 # binary versioning field
-        first_field: uint32
-
-    MessageSpecifierBlock = object
-        flags: uint8
-        next_block: uint32
-
-    MessageFieldBlock = object
-        flags: uint8
-        prev: ref Message
-        name_length: uint16 # name is directly after field block
-        typecode: TypeCode
-        next_value: uint32
-        next_block: uint32
-
-    MessageFieldValueBlock = object
-        block_size: uint32
-        prev: ref Message
-        next_value: uint32
-
-    MessageFlag* = enum
-        FromRemote      # Message is from a remote system or thread.
-        FromSystem      # Message is from the system.
-        FromDragAndDrop # Message is the result of D&D.
-        Delivered       # Message was delivered to a target.
-        ExpectingReply  # Sender is awaiting a response.
-
-    Message* = object
-        flags: set[MessageFlag]  # Special flags
-        prev: ref Message        # Message we are a reply to
-        specifiers: seq[Message] # Scripting specifiers
-        buffer: seq[byte]        # Message bytes
+        fqueue: seq[Message]
 
     Messenger* = ref object
 
@@ -526,7 +526,7 @@ proc was_delivered*(self: Message): bool =
 proc was_dropped*(self: Message): bool =
     return FromDragAndDrop in self.flags
 
-proc previous*(self: Message): ref Message =
+proc previous*(self: Message): Message =
     return self.prev
 
 proc drop_point*(self: Message; offset: ref Point = 0): Point =
@@ -550,24 +550,6 @@ proc locked*(self: Looper): bool =
     # XXX this is only valid until we start supporting threads
     return false
 
-proc post_message*(self: Looper; message: Message) =
-    # TODO once we are threaded, post to message queue
-    # TODO what should we do if we're running on async?
-    discard # TODO
-
-proc post_message*(self: Looper; message: Message; handler, reply_to: Handler) =
-    # TODO once we are threaded, post to message queue
-    # TODO what should we do if we're running on async?
-    discard # TODO
-
-proc post_message*(self: Looper; command: uint32) =
-    var msg = make_message(command)
-    self.post_message(msg)
-
-proc post_message*(self: Looper; command: uint32; handler, reply_to: Handler) =
-    var msg = make_message(command)
-    self.post_message(msg, handler, reply_to)
-
 proc add_handler*(self: Looper; handler: Handler) =
     if not (handler in self.fhandlers):
         self.fhandlers.add(handler)
@@ -577,7 +559,7 @@ proc remove_handler*(self: Looper; handler: Handler) =
     if index >= 0:
         self.fhandlers.delete(index)
 
-proc current_message*(self: Looper): ref Message =
+proc current_message*(self: Looper): Message =
     return self.fcurrent_message
 
 proc detach_current_message*(self: Looper): Message = discard # TODO
@@ -614,11 +596,11 @@ proc `==`(self, other: HandlerWatcher): bool =
 proc is_watched*(self: Handler): bool =
     return len(self.fwatchers) > 0
 
-proc message_received*(self: Handler; message: ref Message) =
+proc message_received*(self: Handler; message: Message) =
     if self.fmessage_received != nil:
         self.fmessage_received(message)
 
-proc do_send_notices(self: Handler; what: uint32; message: ref Message = nil) =
+proc do_send_notices(self: Handler; what: uint32; message: Message = nil) =
     # if nobody is in the forest, the tree doesn't make a sound...
     if not self.is_watched: return
     for x in self.fwatchers:
@@ -629,22 +611,22 @@ proc do_send_notices(self: Handler; what: uint32; message: ref Message = nil) =
 proc init*(self: Handler; name: string; default_handlers: bool) =
     self.fname = name
     if not default_handlers: return
-    self.fget_supported_suites = proc(data: ref Message) =
+    self.fget_supported_suites = proc(data: Message) =
         # no supported suites, for now
         discard
-    self.fresolve_specifier = proc(message: ref Message; index: int32; specifier: ref Message; what: int32; property: string): Handler =
+    self.fresolve_specifier = proc(message: Message; index: int32; specifier: Message; what: int32; property: string): Handler =
         # no specifiers to resolve at this level
         return self
-    self.fsend_notices = proc(what: uint32; message: ref Message) =
+    self.fsend_notices = proc(what: uint32; message: Message) =
         self.do_send_notices(what, message)
-        self.fmessage_received = proc(message: ref Message) =
-            message[].send_reply(MESSAGE_NOT_UNDERSTOOD)
+        self.fmessage_received = proc(message: Message) =
+            message.send_reply(MESSAGE_NOT_UNDERSTOOD)
 
 proc make_handler*(name: string = ""; default_handlers: bool = true): Handler =
     new(result)
     result.init(name, default_handlers)
 
-proc get_supported_suites*(self: Handler; message: ref Message) =
+proc get_supported_suites*(self: Handler; message: Message) =
     if self.fget_supported_suites != nil:
         self.fget_supported_suites(message)
 
@@ -660,9 +642,9 @@ proc looper*(self: Handler): Looper {.inline.} =
     return self.flooper
 
 proc resolve_specifier*(self: Handler;
-                        message: ref Message;
+                        message: Message;
                         index: int32;
-                        specifier: ref Message;
+                        specifier: Message;
                         what: int32;
                         property: string): Handler =
     return self.fresolve_specifier(message, index, specifier, what, property)
@@ -700,7 +682,7 @@ proc `next_handler=`*(self, value: Handler) {.inline.} =
 
 proc send_notices_hook*(self: var Handler;
                         what: uint32;
-                        message: ref Message = nil) =
+                        message: Message = nil) =
     if self.fsend_notices != nil:
         self.fsend_notices(what, message)
 
@@ -738,9 +720,15 @@ proc stop_watching*(self: Handler; watcher: Handler; what: uint32) =
     if i >= 0:
         self.fwatchers.delete(i)
 
-proc send_notices*(self: Handler; what: uint32; message: ref Message = nil) =
+proc send_notices*(self: Handler; what: uint32; message: Message = nil) =
     if self.fsend_notices != nil:
         self.fsend_notices(what, message)
+
+proc passes_filters*(self: Handler; message: Message): bool =
+    # XXX should check list of filters and run them against the
+    # message; then return if this handler is willing to accept the
+    # message after all that
+    return true # TODO
 
 # Looper again
 # ============
@@ -749,4 +737,35 @@ proc make_looper*(name: string = ""; default_handlers: bool = true): Looper =
     new(result)
     init(result.Handler, name, default_handlers)
     init(result, name, default_handlers)
+
+proc post_message*(self: Looper; message: Message) =
+    # TODO once we are threaded, post to message queue
+    # TODO what should we do if we're running on async?
+
+    var h = self.fpreferred_handler
+    if h == nil: return
+    if h.passes_filters(message):
+        h.message_received(message)
+
+proc post_message*(self: Looper; message: Message; handler, reply_to: Handler) =
+    # TODO once we are threaded, post to message queue
+    # TODO what should we do if we're running on async?
+
+    # we can handle this at runtime by failing silently, but its bad
+    # code so we should whip the programmer with a stick at debug time
+    assert(handler != nil)
+    assert(handler.looper == self)
+    if handler == nil: return
+    if handler.looper != self: return
+
+    if handler.passes_filters(message):
+        handler.message_received(message)
+
+proc post_message*(self: Looper; command: uint32) =
+    var msg = make_message(command)
+    self.post_message(msg)
+
+proc post_message*(self: Looper; command: uint32; handler, reply_to: Handler) =
+    var msg = make_message(command)
+    self.post_message(msg, handler, reply_to)
 
