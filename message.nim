@@ -498,10 +498,10 @@ proc send_reply*(self: Message; reply: Message; reply_to: Handler = nil; timeout
 proc send_reply*(self: Message; reply: Message; reply_to: Messenger; timeout: BigTime = INFINITE_TIMEOUT) =
     discard # TODO
 
-proc send_reply*(self: Message; command: uint32; reply_to_reply: Message) =
+proc send_reply*(self: Message; command: uint32; reply_to: Message) =
     discard # TODO
 
-proc send_reply*(self: Message; reply: Message; reply_to_reply: Message; timeout: BigTime = INFINITE_TIMEOUT) =
+proc send_reply*(self: Message; reply: Message; reply_to: Message; timeout: BigTime = INFINITE_TIMEOUT) =
     discard # TODO
 
 proc is_empty*(self: Message): bool =
