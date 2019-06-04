@@ -34,7 +34,8 @@ type
 
     Message* = ref object
         flags: set[MessageFlag]  # Special flags
-        prev: Message        # Message we are a reply to
+        reply_to: Handler        # Who to send reply to
+        prev: Message            # Message we are a reply to
         specifiers: seq[Message] # Scripting specifiers
         buffer: seq[byte]        # Message bytes
 
