@@ -30,6 +30,7 @@ type
 
     Looper* = ref object of Handler
         fpreferred_handler: Handler
+        fhandlers: seq[Handler]
 
     MessageSource* = enum
         AnySource
@@ -552,13 +553,29 @@ proc post_message*(self: Looper; command: uint32) = discard # TODO
 proc post_message*(self: Looper; message: Message) = discard # TODO
 proc post_message*(self: Looper; command: uint32 ; handler, reply_to: Handler) = discard # TODO
 proc post_message*(self: Looper; message: Message; handler, reply_to: Handler) = discard # TODO
-proc add_handler*(self: Looper; message: Message; handler: Handler) = discard # TODO
-proc remove_handler*(self: Looper; message: Message) = discard # TODO
+
+proc add_handler*(self: Looper; handler: Handler) =
+    if not (handler in self.fhandlers):
+        self.fhandlers.add(handler)
+
+proc remove_handler*(self: Looper; handler: Handler) =
+    var index = self.fhandlers.find(handler)
+    if index >= 0:
+        self.fhandlers.delete(index)
+
 proc current_message*(self: Looper): Message = discard # TODO
 proc detach_current_message*(self: Looper): Message = discard # TODO
-proc count_handlers*(self: Looper): int32 = discard # TODO
-proc handler_at*(self: Looper; index: int32): Handler = discard # TODO
-proc index_of*(self: Looper; handler: Handler): int32 = discard # TODO
+
+proc count_handlers*(self: Looper): int32 =
+    return len(self.fhandlers).int32
+
+proc handler_at*(self: Looper; index: int32): Handler =
+    if (index < 0) or (index >= len(self.fhandlers).int32):
+        return nil
+    return self.fhandlers[index]
+
+proc index_of*(self: Looper; handler: Handler): int32 =
+    return self.fhandlers.find(handler).int32
 
 proc preferred_handler*(self: Looper): Handler {.inline.} =
     return self.fpreferred_handler
