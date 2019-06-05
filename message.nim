@@ -492,6 +492,21 @@ proc try_find_string*(self: Message; key: string; default_value: string; index: 
   set_len(result, dlen)
   copymem(addr result[0], data, dlen)
 
+proc try_find_float*(self: Message; key: string; default_value: float64; index: int = 0): float64 =
+    var data: pointer
+    var dlen: int
+    var code: TypeCode
+    var found: bool
+    found = self.find_data(key, code, data, dlen, index)
+    if not found:
+        return default_value
+    if code == FLOAT_TYPE:
+        result = cast[ptr float32](data)[].float64
+    elif code == DOUBLE_TYPE:
+        result = cast[ptr float64](data)[]
+    else:
+        return default_value
+
 proc push_specifier*(self: var Message; specifier: string) =
     var s = make_message(MSG_SPECIFIER)
     s.add("name", specifier)
