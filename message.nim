@@ -184,7 +184,7 @@ proc get_field*(self: Message; name: string): ptr MessageFieldBlock =
         if f.name_length.int != name.len: continue
         if equalmem(cast[pointer](cast[int](f) + MessageFieldBlock.sizeof), unsafeaddr name[0], f.name_length): return f
 
-proc has_field*(self: Message; name: string): bool =
+proc has_field*(self: Message; name: string): bool {.exportc:"message_has_field",dynlib.} =
     return get_field(self, name) != nil
 
 proc add_data*(
@@ -194,7 +194,7 @@ proc add_data*(
           data: pointer;
         length: int;
     fixed_size: bool = true;
-         count: int = 1): pointer {.discardable.} =
+         count: int = 1): pointer {.discardable,exportc:"message_add_data",dynlib.} =
 
     # TODO change these to real exceptions
     assert length >= 0
@@ -213,9 +213,8 @@ proc add_data*(
     if stored:
         # it's already here
         if blk.typecode != typecode:
-            # its the wrong type; we can't do anything!
-            # TODO custom exception type?
-            raise newException(IOError, "Field already exists in message, but is wrong type.")
+            # used to be an exception
+            return nil
         # its the right type so we can just append
         set_len(self.buffer, self.buffer.len + MessageFieldValueBlock.sizeof + length)
     else:
@@ -258,7 +257,7 @@ proc add_data*(
         else:
             tail.next_block = int(rec).uint32
 
-proc count_values*(self: Message; key: string): int =
+proc count_values*(self: Message; key: string): int {.exportc:"message_count_values",dynlib.} =
     result = 0
     var f = get_field(self, key)
     if f == nil:
@@ -280,36 +279,36 @@ proc count_values*(self: Message; key: string): int =
 # ('float64', 'DOUBLE_TYPE'),
 # ('pointer', 'POINTER_TYPE')]
 # for x in pairs:
-#   cog.outl("""proc add*(self: var Message; key: string; value: {0}) =
+#   cog.outl("""proc add*(self: var Message; key: string; value: {0}) {{.exportc:"message_add_{0}", dynlib.}} =
 #   self.add_data(key, {1}, cast[pointer](unsafeaddr value), value.sizeof)""".format(x[0], x[1]))
 #]]]
-proc add*(self: var Message; key: string; value: bool) =
+proc add*(self: var Message; key: string; value: bool) {.exportc:"message_add_bool", dynlib.} =
   self.add_data(key, BOOL_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
-proc add*(self: var Message; key: string; value: int8) =
+proc add*(self: var Message; key: string; value: int8) {.exportc:"message_add_int8", dynlib.} =
   self.add_data(key, INT8_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
-proc add*(self: var Message; key: string; value: int16) =
+proc add*(self: var Message; key: string; value: int16) {.exportc:"message_add_int16", dynlib.} =
   self.add_data(key, INT16_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
-proc add*(self: var Message; key: string; value: int32) =
+proc add*(self: var Message; key: string; value: int32) {.exportc:"message_add_int32", dynlib.} =
   self.add_data(key, INT32_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
-proc add*(self: var Message; key: string; value: int64) =
+proc add*(self: var Message; key: string; value: int64) {.exportc:"message_add_int64", dynlib.} =
   self.add_data(key, INT64_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
-proc add*(self: var Message; key: string; value: uint8) =
+proc add*(self: var Message; key: string; value: uint8) {.exportc:"message_add_uint8", dynlib.} =
   self.add_data(key, UINT8_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
-proc add*(self: var Message; key: string; value: uint16) =
+proc add*(self: var Message; key: string; value: uint16) {.exportc:"message_add_uint16", dynlib.} =
   self.add_data(key, UINT16_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
-proc add*(self: var Message; key: string; value: uint32) =
+proc add*(self: var Message; key: string; value: uint32) {.exportc:"message_add_uint32", dynlib.} =
   self.add_data(key, UINT32_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
-proc add*(self: var Message; key: string; value: uint64) =
+proc add*(self: var Message; key: string; value: uint64) {.exportc:"message_add_uint64", dynlib.} =
   self.add_data(key, UINT64_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
-proc add*(self: var Message; key: string; value: float32) =
+proc add*(self: var Message; key: string; value: float32) {.exportc:"message_add_float32", dynlib.} =
   self.add_data(key, FLOAT_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
-proc add*(self: var Message; key: string; value: float64) =
+proc add*(self: var Message; key: string; value: float64) {.exportc:"message_add_float64", dynlib.} =
   self.add_data(key, DOUBLE_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
-proc add*(self: var Message; key: string; value: pointer) =
+proc add*(self: var Message; key: string; value: pointer) {.exportc:"message_add_pointer", dynlib.} =
   self.add_data(key, POINTER_TYPE, cast[pointer](unsafeaddr value), value.sizeof)
 # [[[end]]]
 
-proc add*(self: var Message; key: string; value: string) =
+proc add*(self: var Message; key: string; value: string) {.exportc:"message_add_string",dynlib.} =
     # XXX assuming strings are made of chars
     var x = self.add_data(key, STRING_TYPE, nil, len(value))
     copymem(x,
@@ -322,7 +321,7 @@ proc find_data*(
         typecode: out TypeCode;
             data: out pointer;
           length: out int;
-           index: int = 0): bool =
+           index: int = 0): bool {.exportc:"message_find_data",dynlib.} =
     result = false
     var header = self.get_field(key)
     if header == nil: return
@@ -346,162 +345,201 @@ proc find_data*(
 
 # [[[cog
 # for x in pairs:
-#   cog.outl("""proc try_find_{0}*(self: Message; key: string; default_value: {0}; index: int = 0): {0} =
-#   var data: pointer
-#   var dlen: int
-#   var code: TypeCode
-#   var found: bool
-#   found = self.find_data(key, code, data, dlen, index)
-#   if (not found) or (code != {1}):
-#     return default_value
-#   assert dlen == {0}.sizeof
-#   result = cast[ptr {0}](data)[]
+#   cog.outl("""proc try_find_{0}*(
+#   self: Message; key: string;
+#   default_value: {0};
+#   index: int = 0): {0} {{.exportc:"message_try_find_{0}", dynlib.}} =
+#        var data: pointer
+#        var dlen: int
+#        var code: TypeCode
+#        var found: bool
+#        found = self.find_data(key, code, data, dlen, index)
+#        if (not found) or (code != {1}):
+#            return default_value
+#        assert dlen == {0}.sizeof
+#        result = cast[ptr {0}](data)[]
 #   """.format(x[0], x[1]))
 # ]]]
-proc try_find_bool*(self: Message; key: string; default_value: bool; index: int = 0): bool =
-  var data: pointer
-  var dlen: int
-  var code: TypeCode
-  var found: bool
-  found = self.find_data(key, code, data, dlen, index)
-  if (not found) or (code != BOOL_TYPE):
-    return default_value
-  assert dlen == bool.sizeof
-  result = cast[ptr bool](data)[]
+proc try_find_bool*(
+  self: Message; key: string;
+  default_value: bool;
+  index: int = 0): bool {.exportc:"message_try_find_bool", dynlib.} =
+       var data: pointer
+       var dlen: int
+       var code: TypeCode
+       var found: bool
+       found = self.find_data(key, code, data, dlen, index)
+       if (not found) or (code != BOOL_TYPE):
+           return default_value
+       assert dlen == bool.sizeof
+       result = cast[ptr bool](data)[]
   
-proc try_find_int8*(self: Message; key: string; default_value: int8; index: int = 0): int8 =
-  var data: pointer
-  var dlen: int
-  var code: TypeCode
-  var found: bool
-  found = self.find_data(key, code, data, dlen, index)
-  if (not found) or (code != INT8_TYPE):
-    return default_value
-  assert dlen == int8.sizeof
-  result = cast[ptr int8](data)[]
+proc try_find_int8*(
+  self: Message; key: string;
+  default_value: int8;
+  index: int = 0): int8 {.exportc:"message_try_find_int8", dynlib.} =
+       var data: pointer
+       var dlen: int
+       var code: TypeCode
+       var found: bool
+       found = self.find_data(key, code, data, dlen, index)
+       if (not found) or (code != INT8_TYPE):
+           return default_value
+       assert dlen == int8.sizeof
+       result = cast[ptr int8](data)[]
   
-proc try_find_int16*(self: Message; key: string; default_value: int16; index: int = 0): int16 =
-  var data: pointer
-  var dlen: int
-  var code: TypeCode
-  var found: bool
-  found = self.find_data(key, code, data, dlen, index)
-  if (not found) or (code != INT16_TYPE):
-    return default_value
-  assert dlen == int16.sizeof
-  result = cast[ptr int16](data)[]
+proc try_find_int16*(
+  self: Message; key: string;
+  default_value: int16;
+  index: int = 0): int16 {.exportc:"message_try_find_int16", dynlib.} =
+       var data: pointer
+       var dlen: int
+       var code: TypeCode
+       var found: bool
+       found = self.find_data(key, code, data, dlen, index)
+       if (not found) or (code != INT16_TYPE):
+           return default_value
+       assert dlen == int16.sizeof
+       result = cast[ptr int16](data)[]
   
-proc try_find_int32*(self: Message; key: string; default_value: int32; index: int = 0): int32 =
-  var data: pointer
-  var dlen: int
-  var code: TypeCode
-  var found: bool
-  found = self.find_data(key, code, data, dlen, index)
-  if (not found) or (code != INT32_TYPE):
-    return default_value
-  assert dlen == int32.sizeof
-  result = cast[ptr int32](data)[]
+proc try_find_int32*(
+  self: Message; key: string;
+  default_value: int32;
+  index: int = 0): int32 {.exportc:"message_try_find_int32", dynlib.} =
+       var data: pointer
+       var dlen: int
+       var code: TypeCode
+       var found: bool
+       found = self.find_data(key, code, data, dlen, index)
+       if (not found) or (code != INT32_TYPE):
+           return default_value
+       assert dlen == int32.sizeof
+       result = cast[ptr int32](data)[]
   
-proc try_find_int64*(self: Message; key: string; default_value: int64; index: int = 0): int64 =
-  var data: pointer
-  var dlen: int
-  var code: TypeCode
-  var found: bool
-  found = self.find_data(key, code, data, dlen, index)
-  if (not found) or (code != INT64_TYPE):
-    return default_value
-  assert dlen == int64.sizeof
-  result = cast[ptr int64](data)[]
+proc try_find_int64*(
+  self: Message; key: string;
+  default_value: int64;
+  index: int = 0): int64 {.exportc:"message_try_find_int64", dynlib.} =
+       var data: pointer
+       var dlen: int
+       var code: TypeCode
+       var found: bool
+       found = self.find_data(key, code, data, dlen, index)
+       if (not found) or (code != INT64_TYPE):
+           return default_value
+       assert dlen == int64.sizeof
+       result = cast[ptr int64](data)[]
   
-proc try_find_uint8*(self: Message; key: string; default_value: uint8; index: int = 0): uint8 =
-  var data: pointer
-  var dlen: int
-  var code: TypeCode
-  var found: bool
-  found = self.find_data(key, code, data, dlen, index)
-  if (not found) or (code != UINT8_TYPE):
-    return default_value
-  assert dlen == uint8.sizeof
-  result = cast[ptr uint8](data)[]
+proc try_find_uint8*(
+  self: Message; key: string;
+  default_value: uint8;
+  index: int = 0): uint8 {.exportc:"message_try_find_uint8", dynlib.} =
+       var data: pointer
+       var dlen: int
+       var code: TypeCode
+       var found: bool
+       found = self.find_data(key, code, data, dlen, index)
+       if (not found) or (code != UINT8_TYPE):
+           return default_value
+       assert dlen == uint8.sizeof
+       result = cast[ptr uint8](data)[]
   
-proc try_find_uint16*(self: Message; key: string; default_value: uint16; index: int = 0): uint16 =
-  var data: pointer
-  var dlen: int
-  var code: TypeCode
-  var found: bool
-  found = self.find_data(key, code, data, dlen, index)
-  if (not found) or (code != UINT16_TYPE):
-    return default_value
-  assert dlen == uint16.sizeof
-  result = cast[ptr uint16](data)[]
+proc try_find_uint16*(
+  self: Message; key: string;
+  default_value: uint16;
+  index: int = 0): uint16 {.exportc:"message_try_find_uint16", dynlib.} =
+       var data: pointer
+       var dlen: int
+       var code: TypeCode
+       var found: bool
+       found = self.find_data(key, code, data, dlen, index)
+       if (not found) or (code != UINT16_TYPE):
+           return default_value
+       assert dlen == uint16.sizeof
+       result = cast[ptr uint16](data)[]
   
-proc try_find_uint32*(self: Message; key: string; default_value: uint32; index: int = 0): uint32 =
-  var data: pointer
-  var dlen: int
-  var code: TypeCode
-  var found: bool
-  found = self.find_data(key, code, data, dlen, index)
-  if (not found) or (code != UINT32_TYPE):
-    return default_value
-  assert dlen == uint32.sizeof
-  result = cast[ptr uint32](data)[]
+proc try_find_uint32*(
+  self: Message; key: string;
+  default_value: uint32;
+  index: int = 0): uint32 {.exportc:"message_try_find_uint32", dynlib.} =
+       var data: pointer
+       var dlen: int
+       var code: TypeCode
+       var found: bool
+       found = self.find_data(key, code, data, dlen, index)
+       if (not found) or (code != UINT32_TYPE):
+           return default_value
+       assert dlen == uint32.sizeof
+       result = cast[ptr uint32](data)[]
   
-proc try_find_uint64*(self: Message; key: string; default_value: uint64; index: int = 0): uint64 =
-  var data: pointer
-  var dlen: int
-  var code: TypeCode
-  var found: bool
-  found = self.find_data(key, code, data, dlen, index)
-  if (not found) or (code != UINT64_TYPE):
-    return default_value
-  assert dlen == uint64.sizeof
-  result = cast[ptr uint64](data)[]
+proc try_find_uint64*(
+  self: Message; key: string;
+  default_value: uint64;
+  index: int = 0): uint64 {.exportc:"message_try_find_uint64", dynlib.} =
+       var data: pointer
+       var dlen: int
+       var code: TypeCode
+       var found: bool
+       found = self.find_data(key, code, data, dlen, index)
+       if (not found) or (code != UINT64_TYPE):
+           return default_value
+       assert dlen == uint64.sizeof
+       result = cast[ptr uint64](data)[]
   
-proc try_find_float32*(self: Message; key: string; default_value: float32; index: int = 0): float32 =
-  var data: pointer
-  var dlen: int
-  var code: TypeCode
-  var found: bool
-  found = self.find_data(key, code, data, dlen, index)
-  if (not found) or (code != FLOAT_TYPE):
-    return default_value
-  assert dlen == float32.sizeof
-  result = cast[ptr float32](data)[]
+proc try_find_float32*(
+  self: Message; key: string;
+  default_value: float32;
+  index: int = 0): float32 {.exportc:"message_try_find_float32", dynlib.} =
+       var data: pointer
+       var dlen: int
+       var code: TypeCode
+       var found: bool
+       found = self.find_data(key, code, data, dlen, index)
+       if (not found) or (code != FLOAT_TYPE):
+           return default_value
+       assert dlen == float32.sizeof
+       result = cast[ptr float32](data)[]
   
-proc try_find_float64*(self: Message; key: string; default_value: float64; index: int = 0): float64 =
-  var data: pointer
-  var dlen: int
-  var code: TypeCode
-  var found: bool
-  found = self.find_data(key, code, data, dlen, index)
-  if (not found) or (code != DOUBLE_TYPE):
-    return default_value
-  assert dlen == float64.sizeof
-  result = cast[ptr float64](data)[]
+proc try_find_float64*(
+  self: Message; key: string;
+  default_value: float64;
+  index: int = 0): float64 {.exportc:"message_try_find_float64", dynlib.} =
+       var data: pointer
+       var dlen: int
+       var code: TypeCode
+       var found: bool
+       found = self.find_data(key, code, data, dlen, index)
+       if (not found) or (code != DOUBLE_TYPE):
+           return default_value
+       assert dlen == float64.sizeof
+       result = cast[ptr float64](data)[]
   
-proc try_find_pointer*(self: Message; key: string; default_value: pointer; index: int = 0): pointer =
-  var data: pointer
-  var dlen: int
-  var code: TypeCode
-  var found: bool
-  found = self.find_data(key, code, data, dlen, index)
-  if (not found) or (code != POINTER_TYPE):
-    return default_value
-  assert dlen == pointer.sizeof
-  result = cast[ptr pointer](data)[]
+proc try_find_pointer*(
+  self: Message; key: string;
+  default_value: pointer;
+  index: int = 0): pointer {.exportc:"message_try_find_pointer", dynlib.} =
+       var data: pointer
+       var dlen: int
+       var code: TypeCode
+       var found: bool
+       found = self.find_data(key, code, data, dlen, index)
+       if (not found) or (code != POINTER_TYPE):
+           return default_value
+       assert dlen == pointer.sizeof
+       result = cast[ptr pointer](data)[]
   
 # [[[end]]]
 
 proc try_find_string*(self: Message; key: string; default_value: string; index: int = 0): string =
-  var data: pointer
-  var dlen: int
-  var code: TypeCode
-  var found: bool
-  found = self.find_data(key, code, data, dlen, index)
-  if (not found) or (code != STRING_TYPE):
-    return default_value
-  set_len(result, dlen)
-  copymem(addr result[0], data, dlen)
+    var data: pointer
+    var dlen: int
+    var code: TypeCode
+    var found: bool
+    found = self.find_data(key, code, data, dlen, index)
+    if (not found) or (code != STRING_TYPE):
+        return default_value
+    set_len(result, dlen)
+    copymem(addr result[0], data, dlen)
 
 proc try_find_float*(self: Message; key: string; default_value: float64; index: int = 0): float64 =
     var data: pointer
