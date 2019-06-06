@@ -19,7 +19,7 @@ Welcome to The Beep Boop Conspiracy's documentation!
 
    tap.rst
 
-   point.rst
+   geometry.rst
 
 Indices and tables
 ==================
