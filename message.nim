@@ -124,19 +124,30 @@ proc initialize(self: var MessageBlock; what: uint32) =
     self.block_size = MessageBlock.sizeof.int32
     self.first_field = 0
 
-proc make_message*(what: uint32): Message =
-    # put initial data block in our buffer and initialize it
-    set_len(result.buffer, MessageBlock.sizeof)
+proc init*(self: Message; what: uint32) =
+    set_len(self.buffer, MessageBlock.sizeof)
     var x: ptr MessageBlock
-    x = cast[ptr MessageBlock](addr result.buffer[0])
+    x = cast[ptr MessageBlock](addr self.buffer[0])
     x[].initialize(what)
 
-proc what*(self: Message): uint32 = 
+proc make_message*(what: uint32): Message =
+    # put initial data block in our buffer and initialize it
+    new(result)
+    init(result, what)
+
+proc rez_message*(what: uint32): Message {.exportc,dynlib.} =
+    result = make_message(what)
+    GCref(result)
+
+proc derez_message*(self: Message) {.exportc,dynlib.} =
+    GCunref(self)
+
+proc what*(self: Message): uint32 {.exportc:"message_get_what",dynlib.} = 
     var x: ptr MessageBlock
     x = cast[ptr MessageBlock](addr self.buffer[0])
     return x.what
 
-proc `what=`*(self: Message; value: uint32) =
+proc `what=`*(self: Message; value: uint32) {.exportc:"message_set_what",dynlib.} =
     var x: ptr MessageBlock
     x = cast[ptr MessageBlock](addr self.buffer[0])
     x.what = value
