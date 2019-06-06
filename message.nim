@@ -118,7 +118,7 @@ proc looper*(self: Handler): Looper {.inline.} =
 # ^ not a big deal for trusted code but if we start doing RPC with
 # arbitrary software some of it might be defective
 
-proc initialize(self: var MessageBlock; what: uint32) =
+proc init(self: var MessageBlock; what: uint32) =
     self.flags = 0
     self.what = what
     self.block_size = MessageBlock.sizeof.int32
@@ -128,7 +128,7 @@ proc init*(self: Message; what: uint32) =
     set_len(self.buffer, MessageBlock.sizeof)
     var x: ptr MessageBlock
     x = cast[ptr MessageBlock](addr self.buffer[0])
-    x[].initialize(what)
+    x[].init(what)
 
 proc make_message*(what: uint32): Message =
     # put initial data block in our buffer and initialize it
