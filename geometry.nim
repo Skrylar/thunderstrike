@@ -12,9 +12,9 @@ type
 # =======================================================================
 
 const
-    ORIGINi= Point[int](x: 0, y: 0)
-    ORIGINf32= Point[float32](x: 0.0, y: 0.0)
-    ORIGINf64= Point[float64](x: 0.0, y: 0.0)
+    ORIGINi*   = Point[int](x: 0, y: 0)
+    ORIGINf32* = Point[float32](x: 0.0, y: 0.0)
+    ORIGINf64* = Point[float64](x: 0.0, y: 0.0)
 
 # Modifies point so it is contained by a rectangle.
 proc constrain_to*[T](self: var Point[T]; rect: Rect[T]) =
