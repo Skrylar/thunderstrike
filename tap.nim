@@ -63,6 +63,18 @@ proc not_ok*(writer: var TapWriter; name, comment: string) =
     else:
         echo "not ok ", writer.already_run, " # ", comment
 
+template check*(writer: var TapWriter; expr: untyped) =
+    if expr:
+        writer.ok()
+    else:
+        writer.not_ok()
+
+template check*(writer: var TapWriter; expr: untyped, name: string) =
+    if expr:
+        writer.ok(name)
+    else:
+        writer.not_ok(name)
+
 template fail(writer: var TapWriter) =
     not_ok(writer)
 
