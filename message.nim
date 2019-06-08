@@ -318,9 +318,9 @@ proc add*(self: var Message; key: string; value: string) {.exportc:"message_add_
 proc find_data*(
             self: Message;
              key: string;
-        typecode: out TypeCode;
-            data: out pointer;
-          length: out int;
+        typecode: var TypeCode;
+            data: var pointer;
+          length: var int;
            index: int = 0): bool {.exportc:"message_find_data",dynlib.} =
     result = false
     var header = self.get_field(key)
