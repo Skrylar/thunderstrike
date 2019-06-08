@@ -692,13 +692,23 @@ proc locked*(self: Looper): bool =
     return false
 
 proc add_handler*(self: Looper; handler: Handler) =
+    if handler.flooper != nil:
+        return
     if not (handler in self.fhandlers):
+        handler.flooper = self
         self.fhandlers.add(handler)
+
+template `+=`*(self: Looper; handler: Handler) =
+    add_handler(self, handler)
 
 proc remove_handler*(self: Looper; handler: Handler) =
     var index = self.fhandlers.find(handler)
     if index >= 0:
+        self.fhandlers[index].flooper = nil
         self.fhandlers.delete(index)
+
+template `-=`*(self: Looper; handler: Handler) =
+    remove_handler(self, handler)
 
 proc current_message*(self: Looper): Message =
     return self.fcurrent_message
