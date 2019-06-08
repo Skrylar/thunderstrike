@@ -75,7 +75,7 @@ template check*(writer: var TapWriter; expr: untyped, name: string) =
     else:
         writer.not_ok(name)
 
-template fail(writer: var TapWriter) =
+template fail*(writer: var TapWriter) =
     not_ok(writer)
 
 proc bailout*(writer: var TapWriter) =
